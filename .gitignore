@@ -1,0 +1,29 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Temporary files
+temp/
+*.mp3
+*.mp4
+
+# Environment
+.env
+.env.local
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Remotion
+.remotion/
+
+# Test output
+test/output/
+out/
