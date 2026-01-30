@@ -4,14 +4,16 @@ node_modules/
 # Build output
 dist/
 
+# VS Code extension packages
+*.vsix
+
 # Temporary files
 temp/
-*.mp3
-*.mp4
 
 # Environment
 .env
 .env.local
+.env.*
 
 # IDE
 .vscode/
@@ -21,9 +23,9 @@ temp/
 .DS_Store
 Thumbs.db
 
-# Remotion
-.remotion/
-
 # Test output
 test/output/
 out/
+
+# Cached TTS audio
+*.mp3

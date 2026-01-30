@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <link rel="stylesheet" href="{{cssUri}}" />
+</head>
+<body>
+  <div id="root">
+    <!-- Progress bar -->
+    <div class="progress-bar-track" id="progressTrack">
+      <div class="progress-bar-fill" id="progressFill"></div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+      <div class="header-title" id="headerTitle">No replay loaded</div>
+      <div class="header-subtitle" id="headerSubtitle"></div>
+    </div>
+
+    <!-- Review summary bar -->
+    <div class="review-bar" id="reviewBar" style="display: none;">
+      <span class="review-approved" id="reviewApproved" title="Approved">&#x2714; 0</span>
+      <span class="review-flagged" id="reviewFlagged" title="Flagged">&#x2691; 0</span>
+      <span class="review-unreviewed" id="reviewUnreviewed" title="Unreviewed">&#x25CB; 0</span>
+      <button class="risk-filter-btn" id="btnRiskFilter" title="Show only risky steps">
+        &#x26A0; Risks
+      </button>
+    </div>
+
+    <!-- Step list -->
+    <div class="step-list" id="stepList">
+      <div class="empty-state" id="emptyState">
+        Open a trace file to start a replay.<br />
+        <code>Ctrl+Shift+P</code> &rarr; <strong>Debrief: Load Replay</strong>
+      </div>
+    </div>
+
+    <!-- Narration panel -->
+    <div class="narration-panel" id="narrationPanel">
+      <div class="narration-label">Narration</div>
+      <div class="narration-text" id="narrationText"></div>
+    </div>
+
+    <!-- Playback controls -->
+    <div class="controls" id="controls">
+      <button class="control-btn" id="btnPrev" title="Previous step (Alt+Left)" disabled>
+        &#9664;&#9664;
+      </button>
+      <button class="control-btn control-btn-play" id="btnPlayPause" title="Play (Space)">
+        &#9654;
+      </button>
+      <button class="control-btn" id="btnNext" title="Next step (Alt+Right)" disabled>
+        &#9654;&#9654;
+      </button>
+      <select class="speed-select" id="speedSelect" title="Playback speed">
+        <option value="0.5">0.5x</option>
+        <option value="1" selected>1.0x</option>
+        <option value="2">2.0x</option>
+      </select>
+      <button class="control-btn control-btn-follow active" id="btnFollow" title="Following (click to free)">
+        &#x1F441;
+      </button>
+    </div>
+  </div>
+
+  <script src="{{jsUri}}"></script>
+</body>
+</html>

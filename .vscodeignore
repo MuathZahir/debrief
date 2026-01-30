@@ -1,0 +1,35 @@
+# Source files (only dist is needed)
+src/**
+**/*.ts
+tsconfig.json
+esbuild.js
+
+# Development
+.git/**
+.gitignore
+node_modules/**
+**/*.map
+
+# Documentation (README is included by default)
+CLAUDE.md
+CHANGELOG.md
+examples/**
+scripts/**
+
+# Build artifacts
+*.vsix
+
+# Environment
+.env
+.env.*
+
+# Editor
+.vscode/**
+*.code-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Locked folders (if any remain)
+extensions/**

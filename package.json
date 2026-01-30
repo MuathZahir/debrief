@@ -1,44 +1,205 @@
 {
-  "name": "codelens",
-  "version": "1.0.0",
-  "description": "MCP tool for generating narrated code walkthrough videos",
-  "type": "module",
-  "main": "dist/index.js",
-  "scripts": {
-    "build": "tsc",
-    "start": "node dist/index.js",
-    "dev": "tsc --watch",
-    "remotion:preview": "remotion preview src/video/composition.tsx",
-    "remotion:render": "remotion render src/video/composition.tsx CodeWalkthrough out/video.mp4",
-    "test": "npx tsx test/example.ts"
-  },
-  "keywords": [
-    "mcp",
-    "code-video",
-    "remotion",
-    "tts"
-  ],
-  "author": "",
+  "name": "debrief",
+  "displayName": "Debrief",
+  "description": "Narrated code walkthroughs with TTS — AI-generated voice explains your code with synchronized line highlights.",
+  "version": "0.3.0",
+  "publisher": "debrief",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MuathZahir/debrief"
+  },
+  "homepage": "https://github.com/MuathZahir/debrief#readme",
+  "bugs": {
+    "url": "https://github.com/MuathZahir/debrief/issues"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Education",
+    "Visualization",
+    "Other"
+  ],
+  "keywords": [
+    "code walkthrough",
+    "narration",
+    "tts",
+    "text-to-speech",
+    "tutorial",
+    "onboarding",
+    "documentation",
+    "ai",
+    "claude"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "debrief.loadReplay",
+        "title": "Debrief: Load Replay..."
+      },
+      {
+        "command": "debrief.nextStep",
+        "title": "Debrief: Next Step",
+        "icon": "$(arrow-right)"
+      },
+      {
+        "command": "debrief.previousStep",
+        "title": "Debrief: Previous Step",
+        "icon": "$(arrow-left)"
+      },
+      {
+        "command": "debrief.togglePlayPause",
+        "title": "Debrief: Toggle Play/Pause"
+      },
+      {
+        "command": "debrief.speedUp",
+        "title": "Debrief: Speed Up"
+      },
+      {
+        "command": "debrief.speedDown",
+        "title": "Debrief: Speed Down"
+      },
+      {
+        "command": "debrief.toggleFollowMode",
+        "title": "Debrief: Toggle Follow Mode"
+      },
+      {
+        "command": "debrief.startServer",
+        "title": "Debrief: Start Follow Along Server"
+      },
+      {
+        "command": "debrief.stopServer",
+        "title": "Debrief: Stop Follow Along Server"
+      },
+      {
+        "command": "debrief.exportReview",
+        "title": "Debrief: Export Review"
+      },
+      {
+        "command": "debrief.approveCurrentStep",
+        "title": "Approve Step",
+        "icon": "$(check)"
+      },
+      {
+        "command": "debrief.flagCurrentStep",
+        "title": "Flag Step",
+        "icon": "$(warning)"
+      },
+      {
+        "command": "debrief.showNarration",
+        "title": "Debrief: Show Narration"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "debrief-replay",
+          "title": "Debrief Replay",
+          "icon": "$(play-circle)"
+        }
+      ]
+    },
+    "views": {
+      "debrief-replay": [
+        {
+          "type": "webview",
+          "id": "debrief.timeline",
+          "name": "Timeline"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "debrief.nextStep",
+        "key": "alt+right",
+        "when": "debrief.replayActive"
+      },
+      {
+        "command": "debrief.previousStep",
+        "key": "alt+left",
+        "when": "debrief.replayActive"
+      },
+      {
+        "command": "debrief.togglePlayPause",
+        "key": "space",
+        "when": "debrief.replayActive && focusedView == 'debrief.timeline'"
+      },
+      {
+        "command": "debrief.speedUp",
+        "key": "alt+up",
+        "when": "debrief.replayActive"
+      },
+      {
+        "command": "debrief.speedDown",
+        "key": "alt+down",
+        "when": "debrief.replayActive"
+      }
+    ],
+    "configuration": {
+      "title": "Debrief",
+      "properties": {
+        "debrief.serverPort": {
+          "type": "number",
+          "default": 53931,
+          "description": "Port for the Debrief agent HTTP server"
+        },
+        "debrief.autoStartServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically start the HTTP server on extension activation"
+        },
+        "debrief.openaiApiKey": {
+          "type": "string",
+          "default": "",
+          "description": "OpenAI API key for TTS narration (or set OPENAI_API_KEY environment variable)"
+        },
+        "debrief.enableTts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Enable text-to-speech narration during replay"
+        },
+        "debrief.ttsVoice": {
+          "type": "string",
+          "default": "alloy",
+          "enum": ["alloy", "echo", "fable", "onyx", "nova", "shimmer"],
+          "enumDescriptions": [
+            "Alloy - Neutral, balanced voice (recommended)",
+            "Echo - Warm, conversational voice",
+            "Fable - British-accented, expressive voice",
+            "Onyx - Deep, authoritative voice",
+            "Nova - Bright, friendly voice",
+            "Shimmer - Soft, gentle voice"
+          ],
+          "description": "Voice for TTS narration"
+        },
+        "debrief.ttsSpeed": {
+          "type": "number",
+          "default": 1.0,
+          "minimum": 0.5,
+          "maximum": 2.0,
+          "description": "Speed for TTS narration (1.0 = normal)"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.js",
+    "watch": "node esbuild.js --watch",
+    "package": "npx @vscode/vsce package --no-dependencies"
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.0",
-    "@remotion/bundler": "^4.0.0",
-    "@remotion/cli": "^4.0.0",
-    "@remotion/google-fonts": "^4.0.0",
-    "@remotion/renderer": "^4.0.0",
-    "dotenv": "^16.3.0",
-    "openai": "^4.0.0",
-    "react": "^18.3.1",
-    "react-dom": "^18.3.1",
-    "react-syntax-highlighter": "^15.6.1",
-    "remotion": "^4.0.0",
+    "dotenv": "^16.4.0",
     "zod": "^3.23.0"
   },
   "devDependencies": {
+    "@types/vscode": "^1.85.0",
     "@types/node": "^20.0.0",
-    "@types/react": "^18.3.0",
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "tsx": "^4.0.0",
+    "esbuild": "^0.24.0",
     "typescript": "^5.3.0"
   }
 }
