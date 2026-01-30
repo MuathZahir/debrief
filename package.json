@@ -3,7 +3,7 @@
   "displayName": "Debrief",
   "description": "Narrated code walkthroughs with TTS — AI-generated voice explains your code with synchronized line highlights.",
   "version": "0.3.0",
-  "publisher": "debrief",
+  "publisher": "MuathZahir",
   "license": "MIT",
   "repository": {
     "type": "git",
@@ -35,6 +35,7 @@
   "activationEvents": [
     "onStartupFinished"
   ],
+  "icon": "icon.png",
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
