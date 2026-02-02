@@ -5,13 +5,10 @@ import type {
   StepChangedEvent,
   PlayState,
   PlayStateChangedEvent,
-  StepReviewState,
-  ReviewChangedEvent,
-  ReviewSummary,
-  ReviewExportEntry,
 } from '../trace/types';
 import { getHandler } from './handlers/index';
 import type { HandlerContext } from './handlers/index';
+import { TtsPreloader, type PregenProgressEvent } from '../audio/ttsPreloader';
 
 /**
  * ReplayEngine is a state machine that tracks the current step in a replay
@@ -26,13 +23,15 @@ export class ReplayEngine {
 
   // Playback state
   private _playState: PlayState = 'stopped';
-  private _speed: number = 1.0;
   private _advanceTimer: ReturnType<typeof setTimeout> | null = null;
   private _ttsCompletionDisposable: vscode.Disposable | null = null;
   private _waitingForTtsRequestId: number | null = null;
 
-  // Review state
-  private reviewStates: Map<string, StepReviewState> = new Map();
+  // Section depth tracking for smooth transitions
+  private _currentSectionDepth: number = 0;
+
+  // TTS pre-generation
+  private _ttsPreloader: TtsPreloader;
 
   // Events
   private readonly _onStepChanged = new vscode.EventEmitter<StepChangedEvent>();
@@ -52,12 +51,22 @@ export class ReplayEngine {
     new vscode.EventEmitter<{ count: number; total: number }>();
   public readonly onEventsAppended = this._onEventsAppended.event;
 
-  private readonly _onReviewChanged =
-    new vscode.EventEmitter<ReviewChangedEvent>();
-  public readonly onReviewChanged = this._onReviewChanged.event;
+  private readonly _onPregenProgress =
+    new vscode.EventEmitter<PregenProgressEvent>();
+  public readonly onPregenProgress = this._onPregenProgress.event;
+
+  private readonly _onFileTransition =
+    new vscode.EventEmitter<{ fileName: string; show: boolean }>();
+  public readonly onFileTransition = this._onFileTransition.event;
 
   constructor(context: HandlerContext) {
     this.context = context;
+    this._ttsPreloader = new TtsPreloader(context.outputChannel);
+
+    // Forward pre-generation progress events
+    this._ttsPreloader.onProgress((progress) => {
+      this._onPregenProgress.fire(progress);
+    });
   }
 
   // ── Getters ────────────────────────────────────────────────────────────
@@ -101,10 +110,6 @@ export class ReplayEngine {
     return this._playState;
   }
 
-  get speed(): number {
-    return this._speed;
-  }
-
   get isPlaying(): boolean {
     return this._playState === 'playing';
   }
@@ -114,12 +119,15 @@ export class ReplayEngine {
   load(session: ReplaySession): void {
     this.clearAdvanceTimer();
     this._playState = 'stopped';
-    this._speed = 1.0;
-    this.reviewStates.clear();
+    this._currentSectionDepth = 0;
     this.events = session.events;
     this.session = session;
     this._currentIndex = -1;
     this._onSessionLoaded.fire(session);
+
+    // Start pre-generating TTS for all events in background
+    this._ttsPreloader.reset();
+    this._ttsPreloader.pregenerate(session.events, this.context.ttsPlayer);
   }
 
   /**
@@ -142,6 +150,9 @@ export class ReplayEngine {
     this.events.push(...newEvents);
     this.session.events = this.events;
 
+    // Pre-generate TTS for new events
+    this._ttsPreloader.pregenerate(newEvents, this.context.ttsPlayer);
+
     this._onEventsAppended.fire({
       count: newEvents.length,
       total: this.events.length,
@@ -151,8 +162,9 @@ export class ReplayEngine {
   clear(): void {
     this.clearAdvanceTimer();
     this.clearTtsCompletionListener();
+    this._ttsPreloader.reset();
     this._playState = 'stopped';
-    this.reviewStates.clear();
+    this._currentSectionDepth = 0;
     this.events = [];
     this.session = null;
     this._currentIndex = -1;
@@ -173,6 +185,18 @@ export class ReplayEngine {
 
     this._currentIndex = index;
     const event = this.events[index];
+
+    // Update section depth for transition timing
+    if (event.type === 'sectionStart') {
+      this._currentSectionDepth++;
+    } else if (event.type === 'sectionEnd') {
+      this._currentSectionDepth = Math.max(0, this._currentSectionDepth - 1);
+    }
+
+    // Prioritize this step in pre-generation if not ready
+    if (!this._ttsPreloader.isReady(event.id) && event.narration?.trim()) {
+      this._ttsPreloader.prioritize(event.id);
+    }
 
     // Execute the handler for this event type
     const handler = getHandler(event.type);
@@ -238,18 +262,37 @@ export class ReplayEngine {
 
   // ── Playback controls ─────────────────────────────────────────────────
 
-  play(): void {
+  async play(): Promise<void> {
     if (!this.isLoaded || this.isAtEnd) {
       return;
     }
+
     this._playState = 'playing';
     this._onPlayStateChanged.fire({
       playState: 'playing',
-      speed: this._speed,
     });
-    // Start waiting for current step's TTS to complete
+
+    // If no step selected yet, start from the beginning
+    if (this._currentIndex < 0) {
+      await this.goToStep(0);
+      // goToStep will call waitForTtsAndScheduleAdvance since we're playing
+      return;
+    }
+
+    // Already on a step - start TTS and schedule advance
     const event = this.currentEvent;
     if (event) {
+      // Re-execute the handler to start TTS (it was likely already played when user manually clicked)
+      const handler = getHandler(event.type);
+      if (handler) {
+        try {
+          await handler.execute(event, this.context);
+        } catch (err) {
+          this.context.outputChannel.appendLine(
+            `[engine] Handler error for ${event.type} (${event.id}): ${err}`
+          );
+        }
+      }
       this.waitForTtsAndScheduleAdvance(event);
     }
   }
@@ -261,7 +304,6 @@ export class ReplayEngine {
     this.context.ttsPlayer.stop();  // Stop TTS when pausing
     this._onPlayStateChanged.fire({
       playState: 'paused',
-      speed: this._speed,
     });
   }
 
@@ -273,23 +315,6 @@ export class ReplayEngine {
     }
   }
 
-  setSpeed(speed: number): void {
-    const allowed = [0.5, 1.0, 2.0];
-    if (!allowed.includes(speed)) {
-      return;
-    }
-    this._speed = speed;
-    this._onPlayStateChanged.fire({
-      playState: this._playState,
-      speed,
-    });
-    // If currently playing, restart the timer with the new interval
-    if (this._playState === 'playing') {
-      this.clearAdvanceTimer();
-      this.scheduleAdvance();
-    }
-  }
-
   // ── Private: auto-advance with TTS synchronization ───────────────────
 
   /**
@@ -297,9 +322,9 @@ export class ReplayEngine {
    * This ensures audio plays fully before moving to the next step.
    */
   private waitForTtsAndScheduleAdvance(event: TraceEvent): void {
-    // If no narration or TTS skipped, just use a timer
+    // If no narration or TTS skipped, just use a short timer
     if (!event.narration) {
-      this.scheduleAdvanceWithDelay(1500);
+      this.scheduleAdvanceWithDelay(500);
       return;
     }
 
@@ -317,8 +342,10 @@ export class ReplayEngine {
           this.clearTtsCompletionListener();
 
           // Add a brief pause after TTS completes before advancing
-          const pauseAfterTts = cancelled ? 200 : 400;
-          this.scheduleAdvanceWithDelay(pauseAfterTts / this._speed);
+          // Use shorter pause within sections for smooth flow
+          const baseDelay = this._currentSectionDepth > 0 ? 100 : 75;
+          const pauseAfterTts = cancelled ? 25 : baseDelay;
+          this.scheduleAdvanceWithDelay(pauseAfterTts);
         }
       }
     );
@@ -376,62 +403,77 @@ export class ReplayEngine {
     this._waitingForTtsRequestId = null;
   }
 
-  // ── Review state management ───────────────────────────────────────────
+  // ── File transition indicator ────────────────────────────────────────
 
-  approveStep(eventId: string): void {
-    const state: StepReviewState = { status: 'approved' };
-    this.reviewStates.set(eventId, state);
-    this._onReviewChanged.fire({ eventId, state });
+  /**
+   * Show the file transition indicator in the timeline panel.
+   */
+  showFileTransition(fileName: string): void {
+    this._onFileTransition.fire({ fileName, show: true });
   }
 
-  flagStep(eventId: string, comment?: string): void {
-    const state: StepReviewState = { status: 'flagged', comment };
-    this.reviewStates.set(eventId, state);
-    this._onReviewChanged.fire({ eventId, state });
+  /**
+   * Hide the file transition indicator.
+   */
+  hideFileTransition(): void {
+    this._onFileTransition.fire({ fileName: '', show: false });
   }
 
-  clearReview(eventId: string): void {
-    const state: StepReviewState = { status: 'unreviewed' };
-    this.reviewStates.set(eventId, state);
-    this._onReviewChanged.fire({ eventId, state });
-  }
+  // ── Comment persistence ───────────────────────────────────────────────
 
-  getReviewState(eventId: string): StepReviewState {
-    return this.reviewStates.get(eventId) ?? { status: 'unreviewed' };
-  }
-
-  getReviewSummary(): ReviewSummary {
-    let approved = 0;
-    let flagged = 0;
-    let unreviewed = 0;
-
-    for (const event of this.events) {
-      const state = this.reviewStates.get(event.id);
-      if (!state || state.status === 'unreviewed') {
-        unreviewed++;
-      } else if (state.status === 'approved') {
-        approved++;
-      } else if (state.status === 'flagged') {
-        flagged++;
-      }
+  /**
+   * Save a comment on a specific event and persist to trace file.
+   */
+  async saveComment(eventId: string, comment: string): Promise<void> {
+    const event = this.events.find((e) => e.id === eventId);
+    if (!event) {
+      return;
     }
 
-    return { approved, flagged, unreviewed };
+    // Update or remove comment
+    if (comment.trim()) {
+      event.comment = comment.trim();
+    } else {
+      delete event.comment;
+    }
+
+    // Persist to trace file
+    await this.persistTraceFile();
+
+    // Notify UI
+    this._onStepChanged.fire({
+      index: this._currentIndex,
+      event: this.currentEvent!,
+      total: this.events.length,
+    });
   }
 
-  exportReview(): ReviewExportEntry[] {
-    const entries: ReviewExportEntry[] = [];
-    for (const event of this.events) {
-      const state = this.reviewStates.get(event.id);
-      if (state && state.status !== 'unreviewed') {
-        entries.push({
-          eventId: event.id,
-          status: state.status,
-          comment: state.comment,
-        });
-      }
+  /**
+   * Persist current events to the trace file.
+   */
+  private async persistTraceFile(): Promise<void> {
+    if (!this.session?.tracePath) {
+      vscode.window.showWarningMessage('Cannot save comment: no trace file path');
+      return;
     }
-    return entries;
+
+    try {
+      const uri = vscode.Uri.file(this.session.tracePath);
+
+      // Check if file exists and is writable
+      try {
+        await vscode.workspace.fs.stat(uri);
+      } catch {
+        vscode.window.showWarningMessage('Cannot save comment: trace file not found');
+        return;
+      }
+
+      // Build JSONL content
+      const lines = this.events.map((e) => JSON.stringify(e)).join('\n') + '\n';
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(lines, 'utf-8'));
+    } catch (err) {
+      vscode.window.showErrorMessage(`Failed to save comment: ${err}`);
+    }
   }
 
   // ── Cleanup ────────────────────────────────────────────────────────────
@@ -439,12 +481,14 @@ export class ReplayEngine {
   dispose(): void {
     this.clearAdvanceTimer();
     this.clearTtsCompletionListener();
+    this._ttsPreloader.dispose();
     this.context.decorationManager.clearAll();
     this._onStepChanged.dispose();
     this._onSessionLoaded.dispose();
     this._onSessionCleared.dispose();
     this._onPlayStateChanged.dispose();
     this._onEventsAppended.dispose();
-    this._onReviewChanged.dispose();
+    this._onPregenProgress.dispose();
+    this._onFileTransition.dispose();
   }
 }

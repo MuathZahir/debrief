@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Debrief Audio Player</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 8px;
+      font-family: system-ui, sans-serif;
+      font-size: 12px;
+      background: transparent;
+    }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <audio id="player"></audio>
+  <script>
+    (function() {
+      const vscode = acquireVsCodeApi();
+      const player = document.getElementById('player');
+
+      // Send message to extension
+      function send(type, data = {}) {
+        vscode.postMessage({ type, ...data });
+      }
+
+      // Audio events
+      player.addEventListener('playing', () => {
+        send('playing', { currentTime: player.currentTime });
+      });
+
+      player.addEventListener('timeupdate', () => {
+        send('timeupdate', { currentTime: player.currentTime });
+      });
+
+      player.addEventListener('ended', () => {
+        send('ended');
+      });
+
+      player.addEventListener('error', (e) => {
+        send('error', { message: player.error?.message || 'Unknown error' });
+      });
+
+      player.addEventListener('canplaythrough', () => {
+        send('canplaythrough', { duration: player.duration });
+      });
+
+      // Handle commands from extension
+      window.addEventListener('message', (event) => {
+        const msg = event.data;
+
+        switch (msg.command) {
+          case 'play':
+            // Set source and play
+            player.src = msg.src;
+            player.play().catch(err => {
+              send('error', { message: err.message });
+            });
+            break;
+
+          case 'stop':
+            player.pause();
+            player.currentTime = 0;
+            player.src = '';
+            send('stopped');
+            break;
+
+          case 'pause':
+            player.pause();
+            send('paused', { currentTime: player.currentTime });
+            break;
+
+          case 'resume':
+            player.play().catch(err => {
+              send('error', { message: err.message });
+            });
+            break;
+
+          case 'ping':
+            send('pong');
+            break;
+        }
+      });
+
+      // Signal ready
+      send('ready');
+    })();
+  </script>
+</body>
+</html>

@@ -78,20 +78,6 @@
         "title": "Debrief: Stop Follow Along Server"
       },
       {
-        "command": "debrief.exportReview",
-        "title": "Debrief: Export Review"
-      },
-      {
-        "command": "debrief.approveCurrentStep",
-        "title": "Approve Step",
-        "icon": "$(check)"
-      },
-      {
-        "command": "debrief.flagCurrentStep",
-        "title": "Flag Step",
-        "icon": "$(warning)"
-      },
-      {
         "command": "debrief.showNarration",
         "title": "Debrief: Show Narration"
       }

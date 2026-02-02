@@ -1,0 +1,15 @@
+{"id":"e1","type":"say","title":"Introduction","narration":"Let me walk you through the new TTS optimization. We eliminated the Whisper API calls and now pre-generate audio when a trace loads."}
+{"id":"s1","type":"sectionStart","title":"TtsPreloader","narration":""}
+{"id":"e2","type":"highlightRange","filePath":"src/audio/ttsPreloader.ts","range":{"startLine":8,"startCol":0,"endLine":14,"endCol":0},"title":"Progress events","narration":"The preloader fires progress events so the UI can show a loading bar."}
+{"id":"e3","type":"highlightRange","filePath":"src/audio/ttsPreloader.ts","range":{"startLine":27,"startCol":0,"endLine":35,"endCol":0},"title":"Queue management","narration":"It maintains a queue of events to process and tracks which ones are done."}
+{"id":"e4","type":"highlightRange","filePath":"src/audio/ttsPreloader.ts","range":{"startLine":59,"startCol":0,"endLine":75,"endCol":0},"title":"Pre-generation","narration":"When pregenerate is called, it filters to events with narration and skips ones already cached."}
+{"id":"s1-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s2","type":"sectionStart","title":"TtsPlayer Updates","narration":""}
+{"id":"e5","type":"highlightRange","filePath":"src/audio/ttsPlayer.ts","range":{"startLine":78,"startCol":0,"endLine":92,"endCol":0},"title":"speakAsync fix","narration":"The key fix here: we call stop before incrementing the request ID. This prevents the completion event from firing with the wrong ID."}
+{"id":"e6","type":"highlightRange","filePath":"src/audio/ttsPlayer.ts","range":{"startLine":101,"startCol":0,"endLine":118,"endCol":0},"title":"generateOnly method","narration":"This new method generates audio without playing it. The preloader uses this to cache everything upfront."}
+{"id":"s2-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s3","type":"sectionStart","title":"Engine Integration","narration":""}
+{"id":"e7","type":"highlightRange","filePath":"src/replay/engine.ts","range":{"startLine":34,"startCol":0,"endLine":38,"endCol":0},"title":"New properties","narration":"The engine now tracks section depth and has a TtsPreloader instance."}
+{"id":"e8","type":"highlightRange","filePath":"src/replay/engine.ts","range":{"startLine":69,"startCol":0,"endLine":77,"endCol":0},"title":"Wiring it up","narration":"In the constructor, we create the preloader and forward its progress events."}
+{"id":"s3-end","type":"sectionEnd","title":"","narration":""}
+{"id":"e9","type":"say","title":"Summary","narration":"That's the core of the optimization. No more Whisper calls, audio pre-generates on load, and sections play smoothly with shorter pauses."}

@@ -36,6 +36,36 @@ body {
   transition: width 0.3s ease;
 }
 
+/* ── Pre-generation progress ──────────────────────────────────────────── */
+
+.pregen-status {
+  padding: 8px 16px;
+  background: var(--vscode-sideBarSectionHeader-background, rgba(255,255,255,0.04));
+  border-bottom: 1px solid var(--vscode-panel-border, rgba(255,255,255,0.1));
+}
+
+.pregen-progress-bar {
+  height: 4px;
+  width: 100%;
+  background: var(--vscode-progressBar-background, rgba(255,255,255,0.08));
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.pregen-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--vscode-charts-purple, #a371f7);
+  transition: width 0.2s ease;
+}
+
+.pregen-text {
+  font-size: 0.8em;
+  color: var(--vscode-descriptionForeground, rgba(255,255,255,0.5));
+  margin-top: 4px;
+  text-align: center;
+}
+
 /* ── Header ───────────────────────────────────────────────────────────── */
 
 .header {
@@ -75,6 +105,39 @@ body {
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.9em;
+}
+
+.empty-state p {
+  margin-bottom: 12px;
+}
+
+.empty-state-hint {
+  font-size: 0.85em;
+  opacity: 0.7;
+  margin-top: 16px !important;
+}
+
+.load-replay-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  font-size: 1em;
+  font-weight: 500;
+  color: var(--vscode-button-foreground);
+  background: var(--vscode-button-background);
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.load-replay-btn:hover {
+  background: var(--vscode-button-hoverBackground);
+}
+
+.load-replay-icon {
+  font-size: 1.1em;
 }
 
 /* ── Section headers ──────────────────────────────────────────────────── */
@@ -298,187 +361,138 @@ body {
   border-color: var(--vscode-focusBorder, #388bfd);
 }
 
-/* ── Review bar ──────────────────────────────────────────────────────────── */
+/* ── Comment button ──────────────────────────────────────────────────── */
 
-.review-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 6px 16px;
-  font-size: 0.85em;
-  background: var(--vscode-sideBarSectionHeader-background, rgba(255,255,255,0.04));
-  border-bottom: 1px solid var(--vscode-panel-border, rgba(255,255,255,0.1));
-}
-
-.review-approved {
-  color: var(--vscode-charts-green, #3fb950);
-}
-
-.review-flagged {
-  color: var(--vscode-charts-orange, #d29922);
-}
-
-.review-unreviewed {
-  color: var(--vscode-descriptionForeground, rgba(255,255,255,0.5));
-}
-
-.risk-filter-btn {
-  margin-left: auto;
-  background: transparent;
-  border: 1px solid var(--vscode-button-border, rgba(255,255,255,0.15));
-  border-radius: 4px;
-  color: var(--vscode-foreground);
-  padding: 2px 8px;
-  font-size: 0.85em;
-  cursor: pointer;
-}
-
-.risk-filter-btn:hover {
-  background: var(--vscode-button-secondaryHoverBackground, rgba(255,255,255,0.1));
-}
-
-.risk-filter-btn.active {
-  background: var(--vscode-button-background, #388bfd);
-  color: var(--vscode-button-foreground, #fff);
-  border-color: transparent;
-}
-
-/* ── Risk badges ─────────────────────────────────────────────────────────── */
-
-.step-risks {
-  display: flex;
-  gap: 3px;
-  flex-shrink: 0;
-}
-
-.risk-badge {
-  font-size: 0.75em;
-  padding: 1px 4px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.risk-badge.security {
-  color: #f85149;
-  background: rgba(248, 81, 73, 0.15);
-}
-
-.risk-badge.migration {
-  color: #a371f7;
-  background: rgba(163, 113, 247, 0.15);
-}
-
-.risk-badge.deletedTests {
-  color: #d29922;
-  background: rgba(210, 153, 34, 0.15);
-}
-
-.risk-badge.publicApi {
-  color: #58a6ff;
-  background: rgba(88, 166, 255, 0.15);
-}
-
-.risk-badge.newDependency {
-  color: #7ee787;
-  background: rgba(126, 231, 135, 0.15);
-}
-
-.risk-badge.largeChange {
-  color: #8b949e;
-  background: rgba(139, 148, 158, 0.15);
-}
-
-/* Risky step row background tint */
-.step-item.has-risks {
-  background: rgba(248, 81, 73, 0.05);
-}
-
-.step-item.has-risks:hover {
-  background: rgba(248, 81, 73, 0.10);
-}
-
-/* ── Review actions ──────────────────────────────────────────────────────── */
-
-.step-actions {
-  display: flex;
-  gap: 4px;
-  flex-shrink: 0;
-  margin-left: auto;
-}
-
-.review-btn {
+.comment-btn {
   background: transparent;
   border: none;
-  padding: 2px 4px;
-  font-size: 0.85em;
+  padding: 2px 6px;
+  font-size: 0.9em;
   cursor: pointer;
-  opacity: 0.4;
+  opacity: 0.3;
+  margin-left: auto;
   border-radius: 3px;
 }
 
-.review-btn:hover {
+.comment-btn:hover {
   opacity: 1;
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--vscode-toolbar-hoverBackground);
 }
 
-.review-btn.approve {
-  color: var(--vscode-charts-green, #3fb950);
+.comment-btn.has-comment {
+  opacity: 0.9;
+  color: var(--vscode-textLink-foreground);
 }
 
-.review-btn.flag {
-  color: var(--vscode-charts-orange, #d29922);
-}
-
-.review-btn.active {
-  opacity: 1;
-}
-
-.step-item.reviewed-approved {
-  border-left-color: var(--vscode-charts-green, #3fb950);
-}
-
-.step-item.reviewed-flagged {
-  border-left-color: var(--vscode-charts-orange, #d29922);
-}
-
-/* ── Comment input (inline) ──────────────────────────────────────────────── */
+/* ── Comment input row ───────────────────────────────────────────────── */
 
 .comment-input-row {
   display: flex;
-  padding: 4px 16px 8px;
-  gap: 4px;
-}
-
-.comment-input-row.indented {
-  padding-left: 32px;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--vscode-input-background);
+  border-radius: 4px;
+  margin: 4px 0;
 }
 
 .comment-input {
   flex: 1;
-  background: var(--vscode-input-background, rgba(255,255,255,0.1));
+  background: var(--vscode-input-background);
+  border: 1px solid var(--vscode-input-border);
   color: var(--vscode-input-foreground);
-  border: 1px solid var(--vscode-input-border, rgba(255,255,255,0.15));
-  border-radius: 4px;
   padding: 4px 8px;
-  font-size: 0.85em;
-  font-family: inherit;
+  border-radius: 3px;
+  font-size: 0.9em;
 }
 
 .comment-input:focus {
   outline: none;
-  border-color: var(--vscode-focusBorder, #388bfd);
+  border-color: var(--vscode-focusBorder);
 }
 
 .comment-submit {
-  background: var(--vscode-button-background, #388bfd);
-  color: var(--vscode-button-foreground, #fff);
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
   border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
-  font-size: 0.8em;
+  padding: 4px 12px;
+  border-radius: 3px;
   cursor: pointer;
+  font-size: 0.85em;
 }
 
 .comment-submit:hover {
-  background: var(--vscode-button-hoverBackground, #2a7ae6);
+  background: var(--vscode-button-hoverBackground);
 }
+
+/* ── File transition banner ─────────────────────────────────────────── */
+
+.transition-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg,
+    var(--vscode-button-background, #388bfd) 0%,
+    var(--vscode-charts-purple, #a371f7) 100%);
+  color: var(--vscode-button-foreground, #fff);
+  font-weight: 600;
+  font-size: 0.95em;
+  animation: transitionPulse 0.6s ease-in-out infinite alternate;
+}
+
+.transition-arrow {
+  font-size: 1.3em;
+  animation: transitionArrow 0.4s ease-in-out infinite;
+}
+
+.transition-text {
+  letter-spacing: 0.02em;
+}
+
+@keyframes transitionPulse {
+  from { opacity: 0.85; }
+  to { opacity: 1; }
+}
+
+@keyframes transitionArrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+}
+
+/* ── Risk badges ────────────────────────────────────────────────────── */
+
+.step-risks {
+  display: flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+
+.risk-badge {
+  font-size: 0.75em;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.risk-badge.security {
+  background: rgba(248, 81, 73, 0.2);
+  color: var(--vscode-charts-red, #f85149);
+}
+
+.risk-badge.breaking-change {
+  background: rgba(163, 113, 247, 0.2);
+  color: var(--vscode-charts-purple, #a371f7);
+}
+
+.risk-badge.migration {
+  background: rgba(163, 113, 247, 0.2);
+  color: var(--vscode-charts-purple, #a371f7);
+}
+
+.risk-badge.performance {
+  background: rgba(210, 153, 34, 0.2);
+  color: var(--vscode-charts-yellow, #d29922);
+}
+

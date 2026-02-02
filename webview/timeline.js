@@ -19,24 +19,20 @@
   const btnPrev = document.getElementById('btnPrev');
   const btnNext = document.getElementById('btnNext');
   const btnPlayPause = document.getElementById('btnPlayPause');
-  const speedSelect = document.getElementById('speedSelect');
-  const btnFollow = document.getElementById('btnFollow');
-  const reviewBar = document.getElementById('reviewBar');
-  const reviewApproved = document.getElementById('reviewApproved');
-  const reviewFlagged = document.getElementById('reviewFlagged');
-  const reviewUnreviewed = document.getElementById('reviewUnreviewed');
-  const btnRiskFilter = document.getElementById('btnRiskFilter');
+  const pregenStatus = document.getElementById('pregenStatus');
+  const pregenFill = document.getElementById('pregenFill');
+  const pregenText = document.getElementById('pregenText');
+  const transitionBanner = document.getElementById('transitionBanner');
+  const transitionText = document.getElementById('transitionText');
+  const btnLoadReplay = document.getElementById('btnLoadReplay');
 
   // ── State ──────────────────────────────────────────────────────────────
   let currentIndex = -1;
   let events = [];
   let visitedSteps = new Set();
   let playState = 'stopped';
-  let speed = 1.0;
-  let followEnabled = true;
   let collapsedSections = new Set(); // set of sectionStart event IDs
-  let reviewSummary = { approved: 0, flagged: 0, unreviewed: 0 };
-  let riskFilterActive = false;
+  let pregenProgress = { current: 0, total: 0, status: 'idle' };
   let commentInputEventId = null; // which step's comment input is showing
 
   // ── Icons per event type ───────────────────────────────────────────────
@@ -49,14 +45,12 @@
     sectionEnd: '',               // not rendered
   };
 
-  // ── Risk icons ─────────────────────────────────────────────────────────
+  // ── Risk icons ────────────────────────────────────────────────────────
   var RISK_ICONS = {
-    security: '\u{1F6E1}',      // shield
-    migration: '\u{1F4BE}',     // disk
-    deletedTests: '\u26A0',     // warning
-    publicApi: '\u{1F310}',     // globe
-    newDependency: '\u{1F4E6}', // package
-    largeChange: '\u{1F4C8}',   // chart
+    'security': '\u{1F6E1}',       // shield
+    'breaking-change': '\u26A0',   // warning
+    'migration': '\u{1F4BE}',      // disk
+    'performance': '\u26A1',       // lightning
   };
 
   // ── Section tree builder ───────────────────────────────────────────────
@@ -100,132 +94,27 @@
     return items;
   }
 
-  // ── Check if event has risks ──────────────────────────────────────────
-
-  function hasRisks(event) {
-    return event.risks && event.risks.length > 0;
-  }
-
-  // ── Risk filter helper ────────────────────────────────────────────────
-
-  function shouldShowStep(node) {
-    if (!riskFilterActive) return true;
-    if (node.type === 'section') {
-      // Show section if any children have risks
-      return node.children.some(shouldShowStep);
-    }
-    return hasRisks(node.event);
-  }
-
   // ── Render helpers ─────────────────────────────────────────────────────
 
   function renderRiskBadges(risks) {
+    if (!risks || risks.length === 0) return null;
+
     var container = document.createElement('span');
     container.className = 'step-risks';
-    (risks || []).forEach(function (risk) {
+
+    risks.forEach(function (risk) {
       var badge = document.createElement('span');
-      badge.className = 'risk-badge ' + risk.category;
-      badge.textContent = RISK_ICONS[risk.category] || '\u26A0';
-      badge.title = risk.label;
+      badge.className = 'risk-badge ' + (risk.category || '').replace(/\s+/g, '-');
+      var icon = RISK_ICONS[risk.category] || '\u26A0';
+      badge.textContent = icon;
+      badge.title = risk.label || risk.category;
       container.appendChild(badge);
     });
+
     return container;
-  }
-
-  function renderReviewButtons(event) {
-    var container = document.createElement('span');
-    container.className = 'step-actions';
-
-    var review = event.review || { status: 'unreviewed' };
-
-    // Approve button
-    var approveBtn = document.createElement('button');
-    approveBtn.className = 'review-btn approve' + (review.status === 'approved' ? ' active' : '');
-    approveBtn.textContent = '\u2714'; // checkmark
-    approveBtn.title = review.status === 'approved' ? 'Approved (click to clear)' : 'Approve';
-    approveBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (review.status === 'approved') {
-        vscode.postMessage({ command: 'clearReview', eventId: event.id });
-      } else {
-        vscode.postMessage({ command: 'approveStep', eventId: event.id });
-      }
-    });
-
-    // Flag button
-    var flagBtn = document.createElement('button');
-    flagBtn.className = 'review-btn flag' + (review.status === 'flagged' ? ' active' : '');
-    flagBtn.textContent = '\u2691'; // flag
-    flagBtn.title = review.status === 'flagged' ? 'Flagged (click to clear)' : 'Flag for review';
-    flagBtn.addEventListener('click', function (e) {
-      e.stopPropagation();
-      if (review.status === 'flagged') {
-        vscode.postMessage({ command: 'clearReview', eventId: event.id });
-        if (commentInputEventId === event.id) {
-          commentInputEventId = null;
-          render();
-        }
-      } else {
-        // Show comment input
-        commentInputEventId = event.id;
-        render();
-      }
-    });
-
-    container.appendChild(approveBtn);
-    container.appendChild(flagBtn);
-    return container;
-  }
-
-  function renderCommentInput(event, indentLevel) {
-    var row = document.createElement('div');
-    row.className = 'comment-input-row' + (indentLevel > 0 ? ' indented' : '');
-    if (indentLevel > 1) {
-      row.style.paddingLeft = (16 + indentLevel * 16) + 'px';
-    }
-
-    var input = document.createElement('input');
-    input.type = 'text';
-    input.className = 'comment-input';
-    input.placeholder = 'Add comment (optional)...';
-    var existingComment = (event.review && event.review.comment) || '';
-    input.value = existingComment;
-
-    var submitBtn = document.createElement('button');
-    submitBtn.className = 'comment-submit';
-    submitBtn.textContent = 'Flag';
-    submitBtn.addEventListener('click', function () {
-      vscode.postMessage({
-        command: 'flagStep',
-        eventId: event.id,
-        comment: input.value || undefined,
-      });
-      commentInputEventId = null;
-      render();
-    });
-
-    // Also submit on Enter
-    input.addEventListener('keydown', function (e) {
-      if (e.key === 'Enter') {
-        submitBtn.click();
-      } else if (e.key === 'Escape') {
-        commentInputEventId = null;
-        render();
-      }
-    });
-
-    row.appendChild(input);
-    row.appendChild(submitBtn);
-
-    // Focus input after render
-    setTimeout(function () { input.focus(); }, 0);
-
-    return row;
   }
 
   function renderSectionHeader(node, indentLevel) {
-    if (!shouldShowStep(node)) return null;
-
     var isCollapsed = collapsedSections.has(node.event.id);
     var isCurrent = node.index === currentIndex;
 
@@ -275,20 +164,14 @@
   }
 
   function renderStepItem(node, indentLevel) {
-    if (!shouldShowStep(node)) return null;
-
     var event = node.event;
     var index = node.index;
-    var review = event.review || { status: 'unreviewed' };
 
     var item = document.createElement('div');
     item.className = 'step-item';
     if (indentLevel > 0) item.classList.add('indented');
     if (index === currentIndex) item.classList.add('current');
     if (visitedSteps.has(index)) item.classList.add('visited');
-    if (hasRisks(event)) item.classList.add('has-risks');
-    if (review.status === 'approved') item.classList.add('reviewed-approved');
-    if (review.status === 'flagged') item.classList.add('reviewed-flagged');
 
     if (indentLevel > 1) {
       item.style.paddingLeft = (16 + indentLevel * 16) + 'px';
@@ -306,23 +189,75 @@
     title.className = 'step-title';
     title.textContent = event.title;
 
+    // Comment button
+    var commentBtn = document.createElement('button');
+    commentBtn.className = 'comment-btn' + (event.comment ? ' has-comment' : '');
+    commentBtn.innerHTML = '&#x1F4AC;'; // speech bubble emoji
+    commentBtn.title = event.comment || 'Add comment';
+    commentBtn.addEventListener('click', function (e) {
+      e.stopPropagation();
+      commentInputEventId = (commentInputEventId === event.id) ? null : event.id;
+      render();
+    });
+
     item.appendChild(num);
     item.appendChild(icon);
     item.appendChild(title);
 
-    // Risk badges
-    if (hasRisks(event)) {
-      item.appendChild(renderRiskBadges(event.risks));
+    // Risk badges (if any)
+    var riskBadges = renderRiskBadges(event.risks);
+    if (riskBadges) {
+      item.appendChild(riskBadges);
     }
 
-    // Review buttons
-    item.appendChild(renderReviewButtons(event));
+    item.appendChild(commentBtn);
 
     item.addEventListener('click', function () {
       vscode.postMessage({ command: 'goToStep', index: index });
     });
 
     return item;
+  }
+
+  function renderCommentInput(event, indentLevel) {
+    var row = document.createElement('div');
+    row.className = 'comment-input-row';
+    if (indentLevel > 0) {
+      row.style.paddingLeft = (16 + indentLevel * 16) + 'px';
+    }
+
+    var input = document.createElement('input');
+    input.type = 'text';
+    input.className = 'comment-input';
+    input.placeholder = 'Add feedback for agent...';
+    input.value = event.comment || '';
+
+    var saveBtn = document.createElement('button');
+    saveBtn.className = 'comment-submit';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', function () {
+      vscode.postMessage({
+        command: 'saveComment',
+        eventId: event.id,
+        comment: input.value
+      });
+      commentInputEventId = null;
+      render();
+    });
+
+    input.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter') saveBtn.click();
+      if (e.key === 'Escape') {
+        commentInputEventId = null;
+        render();
+      }
+    });
+
+    row.appendChild(input);
+    row.appendChild(saveBtn);
+
+    setTimeout(function () { input.focus(); }, 0);
+    return row;
   }
 
   function renderNodes(nodes, container, indentLevel) {
@@ -335,10 +270,10 @@
       }
       if (element) {
         container.appendChild(element);
-        // Show comment input if this is the step being flagged
-        if (node.type === 'step' && commentInputEventId === node.event.id) {
-          container.appendChild(renderCommentInput(node.event, indentLevel));
-        }
+      }
+      // Render comment input below step if active
+      if (node.type === 'step' && commentInputEventId === node.event.id) {
+        container.appendChild(renderCommentInput(node.event, indentLevel));
       }
     });
   }
@@ -347,7 +282,7 @@
     var count = 0;
     nodes.forEach(function (node) {
       if (node.type === 'step') {
-        if (shouldShowStep(node)) count++;
+        count++;
       } else if (node.type === 'section' && node.children) {
         count += countSteps(node.children);
       }
@@ -355,32 +290,16 @@
     return count;
   }
 
-  // ── Update review bar ─────────────────────────────────────────────────
+  // ── Update pre-generation progress ───────────────────────────────────
 
-  function updateReviewBar() {
-    if (events.length === 0) {
-      reviewBar.style.display = 'none';
-      return;
-    }
-
-    reviewBar.style.display = 'flex';
-    reviewApproved.innerHTML = '\u2714 ' + reviewSummary.approved;
-    reviewFlagged.innerHTML = '\u2691 ' + reviewSummary.flagged;
-    reviewUnreviewed.innerHTML = '\u25CB ' + reviewSummary.unreviewed;
-
-    // Count risky steps
-    var riskyCount = events.filter(hasRisks).length;
-    if (riskyCount > 0) {
-      btnRiskFilter.textContent = '\u26A0 ' + riskyCount + ' Risk' + (riskyCount !== 1 ? 's' : '');
-      btnRiskFilter.style.display = 'inline-block';
+  function updatePregenProgress() {
+    if (pregenProgress.status === 'complete' || pregenProgress.total === 0) {
+      pregenStatus.style.display = 'none';
     } else {
-      btnRiskFilter.style.display = 'none';
-    }
-
-    if (riskFilterActive) {
-      btnRiskFilter.classList.add('active');
-    } else {
-      btnRiskFilter.classList.remove('active');
+      pregenStatus.style.display = 'block';
+      var pct = (pregenProgress.current / pregenProgress.total) * 100;
+      pregenFill.style.width = pct + '%';
+      pregenText.textContent = 'Preparing audio (' + pregenProgress.current + '/' + pregenProgress.total + ')';
     }
   }
 
@@ -394,7 +313,6 @@
       headerTitle.textContent = 'No replay loaded';
       headerSubtitle.textContent = '';
       progressFill.style.width = '0%';
-      reviewBar.style.display = 'none';
       return;
     }
 
@@ -404,8 +322,12 @@
 
     // Header
     var fileCount = new Set(events.filter(function (e) { return e.filePath; }).map(function (e) { return e.filePath; })).size;
+    var commentCount = events.filter(function (e) { return e.comment; }).length;
     headerTitle.textContent = 'Replay Session';
-    headerSubtitle.textContent = events.length + ' steps' + (fileCount > 0 ? ' \u00B7 ' + fileCount + ' files' : '');
+    var subtitle = events.length + ' steps';
+    if (fileCount > 0) subtitle += ' \u00B7 ' + fileCount + ' files';
+    if (commentCount > 0) subtitle += ' \u00B7 ' + commentCount + ' comment' + (commentCount !== 1 ? 's' : '');
+    headerSubtitle.textContent = subtitle;
 
     // Progress bar
     if (events.length > 0 && currentIndex >= 0) {
@@ -415,12 +337,10 @@
       progressFill.style.width = '0%';
     }
 
-    // Review bar
-    updateReviewBar();
-
     // Step list — build tree and render
     stepList.innerHTML = '';
     var tree = buildSectionTree(events);
+
     renderNodes(tree, stepList, 0);
 
     // Scroll current step into view
@@ -442,8 +362,6 @@
 
     // Play/pause button
     updatePlayButton();
-    updateSpeedSelect();
-    updateFollowButton();
   }
 
   // ── Control updates ────────────────────────────────────────────────────
@@ -455,22 +373,6 @@
     } else {
       btnPlayPause.innerHTML = '&#9654;'; // play icon
       btnPlayPause.title = 'Play (Space)';
-    }
-  }
-
-  function updateSpeedSelect() {
-    speedSelect.value = String(speed);
-  }
-
-  function updateFollowButton() {
-    if (followEnabled) {
-      btnFollow.classList.add('active');
-      btnFollow.title = 'Following (click to free)';
-      btnFollow.textContent = '\u{1F441}'; // eye
-    } else {
-      btnFollow.classList.remove('active');
-      btnFollow.title = 'Free (click to follow)';
-      btnFollow.textContent = '\u{1F440}'; // eyes
     }
   }
 
@@ -488,17 +390,8 @@
     vscode.postMessage({ command: 'togglePlayPause' });
   });
 
-  speedSelect.addEventListener('change', function () {
-    vscode.postMessage({ command: 'setSpeed', speed: parseFloat(speedSelect.value) });
-  });
-
-  btnFollow.addEventListener('click', function () {
-    vscode.postMessage({ command: 'toggleFollowMode' });
-  });
-
-  btnRiskFilter.addEventListener('click', function () {
-    riskFilterActive = !riskFilterActive;
-    render();
+  btnLoadReplay.addEventListener('click', function () {
+    vscode.postMessage({ command: 'loadReplay' });
   });
 
   // ── Messages from extension ────────────────────────────────────────────
@@ -511,9 +404,6 @@
         events = msg.events || [];
         currentIndex = msg.currentIndex;
         playState = msg.playState || 'stopped';
-        speed = msg.speed || 1.0;
-        followEnabled = msg.followEnabled !== false;
-        reviewSummary = msg.reviewSummary || { approved: 0, flagged: 0, unreviewed: 0 };
         if (currentIndex >= 0) {
           visitedSteps.add(currentIndex);
         }
@@ -525,13 +415,29 @@
         currentIndex = -1;
         visitedSteps = new Set();
         playState = 'stopped';
-        speed = 1.0;
-        followEnabled = true;
         collapsedSections = new Set();
-        reviewSummary = { approved: 0, flagged: 0, unreviewed: 0 };
-        riskFilterActive = false;
+        pregenProgress = { current: 0, total: 0, status: 'idle' };
         commentInputEventId = null;
         render();
+        updatePregenProgress();
+        break;
+
+      case 'updatePregenProgress':
+        pregenProgress = {
+          current: msg.current,
+          total: msg.total,
+          status: msg.status
+        };
+        updatePregenProgress();
+        break;
+
+      case 'showTransition':
+        transitionText.textContent = 'Opening ' + msg.fileName + '...';
+        transitionBanner.style.display = 'flex';
+        break;
+
+      case 'hideTransition':
+        transitionBanner.style.display = 'none';
         break;
     }
   });

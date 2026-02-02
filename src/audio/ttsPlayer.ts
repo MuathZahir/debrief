@@ -2,44 +2,26 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import { spawn } from 'child_process';
 import * as dotenv from 'dotenv';
+import { spawn, ChildProcess } from 'child_process';
 
 /**
  * TTS audio player for replay narration.
- * Uses OpenAI TTS API to generate speech and plays via system audio.
+ * Uses OpenAI TTS API to generate speech and plays via webview audio.
  */
 export type TtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
 
-/**
- * Word-level timing from Whisper transcription.
- */
-export interface WordTiming {
-  word: string;
-  start: number; // seconds
-  end: number; // seconds
-}
-
-/**
- * Result from TTS generation with word timings.
- */
-export interface TtsResult {
-  requestId: number;
-  wordTimings: WordTiming[];
-  duration: number; // seconds
-}
 
 export class TtsPlayer {
   private audioCache: Map<string, string> = new Map(); // cacheKey -> tempFilePath
-  private timingsCache: Map<string, WordTiming[]> = new Map(); // cacheKey -> word timings
   private isEnabled = true;
-  private currentProcess: ReturnType<typeof spawn> | null = null;
   private outputChannel: vscode.OutputChannel;
   private tempDir: string;
   private voice: TtsVoice = 'alloy';
   private speed: number = 1.0;
   private isPlaying = false;
   private currentRequestId: number = 0;
+  private currentProcess: ChildProcess | null = null;
 
   // Event fired when playback completes (naturally or via stop)
   private readonly _onPlaybackComplete = new vscode.EventEmitter<{ requestId: number; cancelled: boolean }>();
@@ -94,11 +76,12 @@ export class TtsPlayer {
    * @param eventId Unique ID for caching
    */
   speakAsync(text: string, eventId: string): void {
-    // Increment request ID - invalidates any in-flight requests
-    const requestId = ++this.currentRequestId;
-
-    // Stop any currently playing audio immediately
+    // Stop any currently playing audio FIRST (before incrementing ID)
+    // This ensures the completion event fires with the OLD request ID
     this.stop();
+
+    // Now increment request ID for the new request
+    const requestId = ++this.currentRequestId;
 
     this.speakWithRequestId(text, eventId, requestId).catch(err => {
       // Only log if this was still the active request
@@ -109,153 +92,30 @@ export class TtsPlayer {
   }
 
   /**
-   * Start TTS audio with word-level timing callback.
-   * The callback fires BEFORE playback starts, with Whisper-derived word timings.
-   * Use this for synchronized visual effects (e.g., timed line highlights).
-   *
-   * @param text The narration text to speak
-   * @param eventId Unique ID for caching
-   * @param onTimingsReady Callback with word timings (fires before playback)
+   * Generate TTS audio only (without playing).
+   * Used for pre-generation to cache audio before playback.
+   * @param text The narration text to generate
+   * @param eventId Unique ID for logging
+   * @returns Path to the generated audio file
    */
-  speakAsyncWithTimings(
-    text: string,
-    eventId: string,
-    onTimingsReady: (result: TtsResult) => void
-  ): void {
-    const requestId = ++this.currentRequestId;
-    this.stop();
-
-    this.speakWithTimings(text, eventId, requestId, onTimingsReady).catch(err => {
-      if (requestId === this.currentRequestId) {
-        this.outputChannel.appendLine(`[TtsPlayer] Async speak with timings error: ${err}`);
-      }
-    });
-  }
-
-  /**
-   * Internal: Generate TTS, get word timings, then play.
-   */
-  private async speakWithTimings(
-    text: string,
-    eventId: string,
-    requestId: number,
-    onTimingsReady: (result: TtsResult) => void
-  ): Promise<void> {
-    this.outputChannel.appendLine(`[TtsPlayer] speakWithTimings() called - eventId: ${eventId}, requestId: ${requestId}`);
-
-    if (!this.isEnabled) {
-      this.outputChannel.appendLine(`[TtsPlayer] TTS is disabled in settings`);
-      return;
-    }
+  async generateOnly(text: string, eventId: string): Promise<string> {
+    this.outputChannel.appendLine(`[TtsPlayer] generateOnly() called - eventId: ${eventId}`);
 
     if (!text.trim()) {
-      this.outputChannel.appendLine(`[TtsPlayer] Empty text, skipping`);
-      return;
+      throw new Error('Empty text');
     }
 
     const cacheKey = this.getCacheKey(text);
     let audioFilePath = this.audioCache.get(cacheKey);
-    let wordTimings = this.timingsCache.get(cacheKey);
 
-    // Generate TTS if not cached
-    if (!audioFilePath || !fs.existsSync(audioFilePath)) {
-      try {
-        audioFilePath = await this.generateTts(text, cacheKey);
-        this.audioCache.set(cacheKey, audioFilePath);
-      } catch (err) {
-        this.outputChannel.appendLine(`[TtsPlayer] Failed to generate TTS: ${err}`);
-        vscode.window.showWarningMessage(`TTS failed: ${err}`);
-        return;
-      }
+    if (audioFilePath && fs.existsSync(audioFilePath)) {
+      this.outputChannel.appendLine(`[TtsPlayer] Using cached audio: ${audioFilePath}`);
+      return audioFilePath;
     }
 
-    // Get word timings via Whisper if not cached
-    if (!wordTimings) {
-      try {
-        wordTimings = await this.transcribeForTimings(audioFilePath);
-        this.timingsCache.set(cacheKey, wordTimings);
-        this.outputChannel.appendLine(`[TtsPlayer] Got ${wordTimings.length} word timings from Whisper`);
-      } catch (err) {
-        this.outputChannel.appendLine(`[TtsPlayer] Whisper transcription failed: ${err}`);
-        // Continue without timings - graceful degradation
-        wordTimings = [];
-      }
-    } else {
-      this.outputChannel.appendLine(`[TtsPlayer] Using cached word timings (${wordTimings.length} words)`);
-    }
-
-    // Check if still current request
-    if (requestId !== this.currentRequestId) {
-      this.outputChannel.appendLine(`[TtsPlayer] Request ${requestId} superseded, aborting`);
-      return;
-    }
-
-    // Calculate duration from last word timing or estimate
-    const duration = wordTimings.length > 0
-      ? wordTimings[wordTimings.length - 1].end
-      : text.split(/\s+/).length * 0.3; // rough estimate: 0.3s per word
-
-    // Fire callback BEFORE playback starts
-    onTimingsReady({ requestId, wordTimings, duration });
-
-    // Play the audio
-    try {
-      await this.playAudioFile(audioFilePath);
-      if (requestId === this.currentRequestId) {
-        this._onPlaybackComplete.fire({ requestId, cancelled: false });
-      }
-    } catch (err) {
-      this.outputChannel.appendLine(`[TtsPlayer] Failed to play audio: ${err}`);
-      if (requestId === this.currentRequestId) {
-        this._onPlaybackComplete.fire({ requestId, cancelled: true });
-      }
-    }
-  }
-
-  /**
-   * Transcribe audio file with Whisper to get word-level timestamps.
-   */
-  private async transcribeForTimings(audioPath: string): Promise<WordTiming[]> {
-    const apiKey = this.getApiKey();
-    if (!apiKey) {
-      throw new Error('OPENAI_API_KEY not configured');
-    }
-
-    this.outputChannel.appendLine(`[TtsPlayer] Transcribing with Whisper: ${audioPath}`);
-
-    // Read audio file as buffer
-    const audioBuffer = fs.readFileSync(audioPath);
-    const audioBlob = new Blob([audioBuffer], { type: 'audio/mp3' });
-
-    // Create form data
-    const formData = new FormData();
-    formData.append('file', audioBlob, 'audio.mp3');
-    formData.append('model', 'whisper-1');
-    formData.append('response_format', 'verbose_json');
-    formData.append('timestamp_granularities[]', 'word');
-
-    const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Whisper API error: ${response.status} ${errorText}`);
-    }
-
-    const result = await response.json() as {
-      words?: Array<{ word: string; start: number; end: number }>;
-    };
-
-    return (result.words ?? []).map(w => ({
-      word: w.word,
-      start: w.start,
-      end: w.end,
-    }));
+    audioFilePath = await this.generateTts(text, cacheKey);
+    this.audioCache.set(cacheKey, audioFilePath);
+    return audioFilePath;
   }
 
   /**
@@ -272,8 +132,9 @@ export class TtsPlayer {
    * @param eventId Unique ID for caching
    */
   async speak(text: string, eventId: string): Promise<void> {
-    const requestId = ++this.currentRequestId;
+    // Stop first, then increment ID (same as speakAsync)
     this.stop();
+    const requestId = ++this.currentRequestId;
     await this.speakWithRequestId(text, eventId, requestId);
   }
 
@@ -285,11 +146,23 @@ export class TtsPlayer {
 
     if (!this.isEnabled) {
       this.outputChannel.appendLine(`[TtsPlayer] TTS is disabled in settings`);
+      // Defer completion to next tick so listener has time to be set up
+      setImmediate(() => {
+        if (requestId === this.currentRequestId) {
+          this._onPlaybackComplete.fire({ requestId, cancelled: true });
+        }
+      });
       return;
     }
 
     if (!text.trim()) {
       this.outputChannel.appendLine(`[TtsPlayer] Empty text, skipping`);
+      // Defer completion to next tick so listener has time to be set up
+      setImmediate(() => {
+        if (requestId === this.currentRequestId) {
+          this._onPlaybackComplete.fire({ requestId, cancelled: true });
+        }
+      });
       return;
     }
 
@@ -304,6 +177,12 @@ export class TtsPlayer {
       } catch (err) {
         this.outputChannel.appendLine(`[TtsPlayer] Failed to generate TTS: ${err}`);
         vscode.window.showWarningMessage(`TTS failed: ${err}`);
+        // Defer completion to next tick so listener has time to be set up
+        setImmediate(() => {
+          if (requestId === this.currentRequestId) {
+            this._onPlaybackComplete.fire({ requestId, cancelled: true });
+          }
+        });
         return;
       }
     } else {
@@ -337,11 +216,15 @@ export class TtsPlayer {
    */
   stop(): void {
     const wasPlaying = this.isPlaying;
+
+    // Kill the current audio process if running
     if (this.currentProcess) {
       this.currentProcess.kill();
       this.currentProcess = null;
     }
+
     this.isPlaying = false;
+
     // Fire completion event if we were playing (cancelled)
     if (wasPlaying) {
       this._onPlaybackComplete.fire({ requestId: this.currentRequestId, cancelled: true });
@@ -373,7 +256,7 @@ export class TtsPlayer {
   }
 
   /**
-   * Clear the audio and timings caches.
+   * Clear the audio cache.
    */
   clearCache(): void {
     // Delete cached audio files
@@ -387,7 +270,6 @@ export class TtsPlayer {
       }
     }
     this.audioCache.clear();
-    this.timingsCache.clear();
   }
 
   /**
@@ -439,78 +321,65 @@ export class TtsPlayer {
   }
 
   /**
-   * Play audio file using system player.
+   * Play audio file using system audio player.
+   * Uses PowerShell on Windows, afplay on macOS, mpv/paplay on Linux.
    */
   private playAudioFile(filePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      const platform = process.platform;
+      this.outputChannel.appendLine(`[TtsPlayer] Playing audio via system: ${filePath}`);
+      this.isPlaying = true;
+
       let command: string;
       let args: string[];
 
+      const platform = os.platform();
       if (platform === 'win32') {
-        // Windows: use PowerShell with Windows Media Player COM object for MP3
+        // Windows: Use PowerShell with Windows Media Player COM object (supports MP3)
+        const escapedPath = filePath.replace(/'/g, "''");
         command = 'powershell';
         args = [
-          '-ExecutionPolicy', 'Bypass',
+          '-NoProfile',
+          '-NonInteractive',
           '-Command',
-          `Add-Type -AssemblyName presentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open([Uri]'${filePath.replace(/'/g, "''")}'); $player.Play(); Start-Sleep -Milliseconds 500; while ($player.NaturalDuration.HasTimeSpan -eq $false) { Start-Sleep -Milliseconds 100 }; $duration = $player.NaturalDuration.TimeSpan.TotalMilliseconds; Start-Sleep -Milliseconds $duration; $player.Close()`
+          `Add-Type -AssemblyName PresentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open([Uri]'${escapedPath}'); $player.Play(); Start-Sleep -Milliseconds 500; while ($player.Position -lt $player.NaturalDuration.TimeSpan) { Start-Sleep -Milliseconds 100 }; $player.Close()`,
         ];
       } else if (platform === 'darwin') {
-        // macOS: use afplay
+        // macOS: Use afplay
         command = 'afplay';
         args = [filePath];
       } else {
-        // Linux: try paplay (PulseAudio) or aplay (ALSA)
-        command = 'paplay';
-        args = [filePath];
+        // Linux: Try mpv first, fall back to paplay
+        command = 'mpv';
+        args = ['--no-video', '--really-quiet', filePath];
       }
 
-      this.outputChannel.appendLine(`[TtsPlayer] Playing audio: ${filePath}`);
-      this.isPlaying = true;
+      this.outputChannel.appendLine(`[TtsPlayer] Running: ${command} ${args.join(' ')}`);
 
-      this.currentProcess = spawn(command, args, {
-        stdio: 'pipe',
-        shell: false,
+      const proc = spawn(command, args, {
+        stdio: 'ignore',
+        detached: false,
       });
 
-      let stderr = '';
-      this.currentProcess.stderr?.on('data', (data) => {
-        stderr += data.toString();
-      });
+      this.currentProcess = proc;
 
-      this.currentProcess.on('close', (code) => {
-        this.currentProcess = null;
+      proc.on('error', (err) => {
         this.isPlaying = false;
-        if (code === 0) {
+        this.currentProcess = null;
+        this.outputChannel.appendLine(`[TtsPlayer] Process error: ${err.message}`);
+        reject(err);
+      });
+
+      proc.on('close', (code) => {
+        this.isPlaying = false;
+        this.currentProcess = null;
+
+        if (code === 0 || code === null) {
           this.outputChannel.appendLine(`[TtsPlayer] Playback completed`);
           resolve();
         } else {
-          this.outputChannel.appendLine(`[TtsPlayer] Playback failed: ${stderr}`);
-          // On Linux, if paplay fails, try aplay
-          if (platform === 'linux' && command === 'paplay') {
-            this.outputChannel.appendLine(`[TtsPlayer] paplay failed, trying aplay...`);
-            this.isPlaying = true;
-            this.currentProcess = spawn('aplay', [filePath]);
-            this.currentProcess.on('close', (code2) => {
-              this.currentProcess = null;
-              this.isPlaying = false;
-              code2 === 0 ? resolve() : reject(new Error(`Audio playback failed with code ${code2}`));
-            });
-            this.currentProcess.on('error', (err) => {
-              this.isPlaying = false;
-              reject(err);
-            });
-          } else {
-            reject(new Error(`Audio playback failed with code ${code}: ${stderr}`));
-          }
+          this.outputChannel.appendLine(`[TtsPlayer] Process exited with code ${code}`);
+          reject(new Error(`Audio player exited with code ${code}`));
         }
-      });
-
-      this.currentProcess.on('error', (err) => {
-        this.currentProcess = null;
-        this.isPlaying = false;
-        this.outputChannel.appendLine(`[TtsPlayer] Spawn error: ${err.message}`);
-        reject(err);
       });
     });
   }

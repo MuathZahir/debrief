@@ -43,6 +43,13 @@ export type TraceEventType = (typeof TRACE_EVENT_TYPES)[number];
 
 // ── Trace event ────────────────────────────────────────────────────────────
 
+// ── Agent-specified risks (replaces auto-detection) ────────────────────────
+
+export interface AgentRisk {
+  category: string;  // e.g., "security", "breaking-change", "performance"
+  label: string;     // Human-readable description
+}
+
 export interface TraceEvent {
   id: string;
   type: TraceEventType;
@@ -51,16 +58,25 @@ export interface TraceEvent {
   filePath?: string;
   range?: TraceRange;
   metadata?: Record<string, unknown>;
+  comment?: string;       // User feedback comment
+  risks?: AgentRisk[];    // Agent-specified risks
 }
+
+export const agentRiskSchema = z.object({
+  category: z.string(),
+  label: z.string(),
+});
 
 export const traceEventSchema = z.object({
   id: z.string().min(1),
   type: z.enum(TRACE_EVENT_TYPES),
-  title: z.string().min(1),
+  title: z.string(),  // Allow empty for sectionEnd events
   narration: z.string(),
   filePath: z.string().optional(),
   range: traceRangeSchema.optional(),
   metadata: z.record(z.unknown()).optional(),
+  comment: z.string().optional(),
+  risks: z.array(agentRiskSchema).optional(),
 });
 
 // ── Session ────────────────────────────────────────────────────────────────
@@ -83,6 +99,7 @@ export interface ReplaySession {
   events: TraceEvent[];
   metadata?: SessionMetadata;
   summary?: string;
+  tracePath?: string;  // Path to source JSONL file for persistence
 }
 
 // ── Step state (used by engine) ────────────────────────────────────────────
@@ -99,7 +116,6 @@ export type PlayState = 'stopped' | 'playing' | 'paused';
 
 export interface PlayStateChangedEvent {
   playState: PlayState;
-  speed: number;
 }
 
 // ── Follow mode ───────────────────────────────────────────────────────────
@@ -108,28 +124,3 @@ export interface FollowModeChangedEvent {
   enabled: boolean;
 }
 
-// ── Review state ──────────────────────────────────────────────────────────
-
-export type ReviewStatus = 'unreviewed' | 'approved' | 'flagged';
-
-export interface StepReviewState {
-  status: ReviewStatus;
-  comment?: string;
-}
-
-export interface ReviewChangedEvent {
-  eventId: string;
-  state: StepReviewState;
-}
-
-export interface ReviewSummary {
-  approved: number;
-  flagged: number;
-  unreviewed: number;
-}
-
-export interface ReviewExportEntry {
-  eventId: string;
-  status: ReviewStatus;
-  comment?: string;
-}

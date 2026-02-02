@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { TraceEvent, StepReviewState } from '../trace/types';
+import type { TraceEvent } from '../trace/types';
 
 /**
  * Manages inline narration display using status bar and subtle line indicators.
@@ -27,31 +27,18 @@ export class InlineCardController {
    * @param totalSteps Total number of steps
    * @param editor The active editor
    * @param line The first line of the highlight (1-indexed)
-   * @param reviewState Review state for styling
    */
   async showCard(
     event: TraceEvent,
     stepIndex: number,
     totalSteps: number,
     editor: vscode.TextEditor,
-    line: number,
-    reviewState: StepReviewState
+    line: number
   ): Promise<void> {
     this.clearLineMarker();
 
     const stepLabel = `Step ${stepIndex + 1}/${totalSteps}`;
     const title = event.title || 'Step';
-
-    // Determine icon based on review state
-    let stateIcon = '';
-    let stateText = '';
-    if (reviewState.status === 'approved') {
-      stateIcon = '$(check) ';
-      stateText = ' [Approved]';
-    } else if (reviewState.status === 'flagged') {
-      stateIcon = '$(warning) ';
-      stateText = ' [Flagged]';
-    }
 
     // Create a small line marker decoration showing step number
     this.lineMarker = vscode.window.createTextEditorDecorationType({
@@ -75,7 +62,7 @@ export class InlineCardController {
     this.activeEditor = editor;
 
     // Update status bar with full info
-    this.statusBarItem.text = `${stateIcon}$(comment) ${stepLabel}: ${title}${stateText}`;
+    this.statusBarItem.text = `$(comment) ${stepLabel}: ${title}`;
 
     // Show full narration in tooltip (multiline supported)
     const narration = event.narration || 'No narration';
@@ -114,11 +101,10 @@ export class InlineCardController {
     event: TraceEvent,
     stepIndex: number,
     totalSteps: number,
-    editor: vscode.TextEditor,
-    reviewState: StepReviewState
+    editor: vscode.TextEditor
   ): Promise<void> {
     // For file-level events, show at line 1
-    await this.showCard(event, stepIndex, totalSteps, editor, 1, reviewState);
+    await this.showCard(event, stepIndex, totalSteps, editor, 1);
   }
 
   /**

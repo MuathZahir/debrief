@@ -1,0 +1,41 @@
+{"id":"intro","type":"say","title":"Introduction","narration":"Let me walk you through how the Debrief replay engine works. We'll see how events flow from the trace file through handlers to the UI."}
+{"id":"s1","type":"sectionStart","title":"Extension Entry","narration":""}
+{"id":"e1","type":"highlightRange","title":"VS Code imports","narration":"We start with the VS Code API import. This gives us access to commands, windows, and the extension context.","filePath":"src/extension.ts","range":{"startLine":1,"startCol":0,"endLine":4,"endCol":0}}
+{"id":"e2","type":"highlightRange","title":"Internal imports","narration":"Then we import our internal modules - the replay engine, timeline view, and TTS player.","filePath":"src/extension.ts","range":{"startLine":5,"startCol":0,"endLine":8,"endCol":0}}
+{"id":"s1-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s2","type":"sectionStart","title":"Replay Engine Core","narration":""}
+{"id":"e3","type":"highlightRange","title":"Class declaration","narration":"The ReplayEngine is the heart of the extension. It's a state machine that tracks playback.","filePath":"src/replay/engine.ts","range":{"startLine":22,"startCol":0,"endLine":23,"endCol":0}}
+{"id":"e4","type":"highlightRange","title":"Core state","narration":"These are the key state variables - the events array and current index.","filePath":"src/replay/engine.ts","range":{"startLine":23,"startCol":0,"endLine":26,"endCol":0}}
+{"id":"e5","type":"highlightRange","title":"Playback state","narration":"Play state can be stopped, playing, or paused. The timer handles auto-advance.","filePath":"src/replay/engine.ts","range":{"startLine":29,"startCol":0,"endLine":31,"endCol":0}}
+{"id":"s2-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s3","type":"sectionStart","title":"Loading a Session","narration":""}
+{"id":"e6","type":"highlightRange","title":"Load method signature","narration":"The load method takes a ReplaySession containing the trace events.","filePath":"src/replay/engine.ts","range":{"startLine":126,"startCol":0,"endLine":128,"endCol":0}}
+{"id":"e7","type":"highlightRange","title":"Reset state","narration":"First we clear any pending timers and reset to stopped state.","filePath":"src/replay/engine.ts","range":{"startLine":127,"startCol":0,"endLine":130,"endCol":0}}
+{"id":"e8","type":"highlightRange","title":"Store events","narration":"Then we store the events and set the index to negative one - no step selected yet.","filePath":"src/replay/engine.ts","range":{"startLine":131,"startCol":0,"endLine":134,"endCol":0}}
+{"id":"e9","type":"highlightRange","title":"Start TTS preload","narration":"Finally, we kick off background TTS generation so audio is ready when needed.","filePath":"src/replay/engine.ts","range":{"startLine":137,"startCol":0,"endLine":139,"endCol":0}}
+{"id":"s3-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s4","type":"sectionStart","title":"Step Navigation","narration":""}
+{"id":"e10","type":"highlightRange","title":"goToStep signature","narration":"The goToStep method is where navigation happens. It takes an index and optional skip-TTS flag.","filePath":"src/replay/engine.ts","range":{"startLine":186,"startCol":0,"endLine":188,"endCol":0}}
+{"id":"e11","type":"highlightRange","title":"Bounds check","narration":"First we validate the index is within bounds.","filePath":"src/replay/engine.ts","range":{"startLine":189,"startCol":0,"endLine":191,"endCol":0}}
+{"id":"e12","type":"highlightRange","title":"Cancel pending","narration":"We cancel any pending timers to prevent race conditions.","filePath":"src/replay/engine.ts","range":{"startLine":193,"startCol":0,"endLine":195,"endCol":0}}
+{"id":"e13","type":"highlightRange","title":"Update index","narration":"Now we update the current index and get the event.","filePath":"src/replay/engine.ts","range":{"startLine":197,"startCol":0,"endLine":198,"endCol":0}}
+{"id":"e14","type":"highlightRange","title":"Get handler","narration":"We look up the appropriate handler for this event type.","filePath":"src/replay/engine.ts","range":{"startLine":211,"startCol":0,"endLine":214,"endCol":0}}
+{"id":"e15","type":"highlightRange","title":"Execute handler","narration":"Then we execute the handler, which opens files and plays audio.","filePath":"src/replay/engine.ts","range":{"startLine":217,"startCol":0,"endLine":219,"endCol":0}}
+{"id":"s4-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s5","type":"sectionStart","title":"Highlight Handler","narration":""}
+{"id":"e16","type":"highlightRange","title":"Handler signature","narration":"The highlightRange handler is the most common. It opens a file and highlights lines.","filePath":"src/replay/handlers/highlightRange.ts","range":{"startLine":14,"startCol":0,"endLine":16,"endCol":0}}
+{"id":"e17","type":"highlightRange","title":"File transition check","narration":"Notice this check - if we're switching files, we show a brief indicator first.","filePath":"src/replay/handlers/highlightRange.ts","range":{"startLine":20,"startCol":0,"endLine":24,"endCol":0}}
+{"id":"e18","type":"highlightRange","title":"Transition indicator","narration":"We create a status bar item showing where we're going, wait 250ms, then dispose it.","filePath":"src/replay/handlers/highlightRange.ts","range":{"startLine":25,"startCol":0,"endLine":29,"endCol":0}}
+{"id":"e19","type":"highlightRange","title":"Open document","narration":"Then we open the target file using VS Code's workspace API.","filePath":"src/replay/handlers/highlightRange.ts","range":{"startLine":35,"startCol":0,"endLine":38,"endCol":0}}
+{"id":"e20","type":"highlightRange","title":"Apply highlight","narration":"Finally we apply the animated highlight to draw attention to the relevant lines.","filePath":"src/replay/handlers/highlightRange.ts","range":{"startLine":45,"startCol":0,"endLine":48,"endCol":0}}
+{"id":"s5-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s6","type":"sectionStart","title":"Timeline UI","narration":""}
+{"id":"e21","type":"highlightRange","title":"Provider class","narration":"The timeline sidebar is a webview. This provider manages communication with it.","filePath":"src/ui/timelineView.ts","range":{"startLine":13,"startCol":0,"endLine":15,"endCol":0}}
+{"id":"e22","type":"highlightRange","title":"Event listeners","narration":"We listen to engine events and push updates to the webview whenever state changes.","filePath":"src/ui/timelineView.ts","range":{"startLine":27,"startCol":0,"endLine":30,"endCol":0}}
+{"id":"e23","type":"highlightRange","title":"Message handling","narration":"Messages from the webview come here. We handle navigation commands like goToStep.","filePath":"src/ui/timelineView.ts","range":{"startLine":65,"startCol":0,"endLine":70,"endCol":0}}
+{"id":"s6-end","type":"sectionEnd","title":"","narration":""}
+{"id":"s7","type":"sectionStart","title":"Comment System","narration":""}
+{"id":"e24","type":"highlightRange","title":"Comment button","narration":"Each step has a comment button. Clicking it reveals an inline input.","filePath":"webview/timeline.js","range":{"startLine":277,"startCol":0,"endLine":280,"endCol":0}}
+{"id":"e25","type":"highlightRange","title":"Save comment","narration":"When you save, we post a message to the extension which writes to the trace file.","filePath":"webview/timeline.js","range":{"startLine":295,"startCol":0,"endLine":300,"endCol":0}}
+{"id":"s7-end","type":"sectionEnd","title":"","narration":""}
+{"id":"summary","type":"say","title":"Summary","narration":"That's the core flow - trace loads into the engine, goToStep executes handlers, handlers open files and highlight lines, and the timeline webview keeps everything in sync. Try adding a comment to test the feedback system!","comment":"Testing the feedback system. Hello!"}

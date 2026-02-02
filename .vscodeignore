@@ -16,6 +16,9 @@ CHANGELOG.md
 examples/**
 scripts/**
 
+# Claude Code research/specs
+.claude/**
+
 # Build artifacts
 *.vsix
 

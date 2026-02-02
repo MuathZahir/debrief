@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { TraceEvent, StepReviewState } from '../trace/types';
+import type { TraceEvent } from '../trace/types';
 
 const CONTROLLER_ID = 'debrief-replay';
 const CONTROLLER_LABEL = 'Debrief Replay';
@@ -78,15 +78,13 @@ export class CommentPanelController {
    * @param totalSteps - Total number of steps
    * @param uri - The file URI to attach the comment to
    * @param range - The range to anchor the comment (null for file-level)
-   * @param reviewState - The review state for this step
    */
   async showStepComment(
     event: TraceEvent,
     stepIndex: number,
     totalSteps: number,
     uri: vscode.Uri,
-    range: vscode.Range | null,
-    reviewState: StepReviewState
+    range: vscode.Range | null
   ): Promise<void> {
     if (!this.controller) {
       return;
@@ -120,13 +118,6 @@ export class CommentPanelController {
     // Create the comment
     const label = `Step ${stepIndex + 1} of ${totalSteps}`;
     const comment = new ReplayComment(content, label);
-
-    // Set context value based on review state for styling
-    if (reviewState.status === 'approved') {
-      comment.contextValue = 'approved';
-    } else if (reviewState.status === 'flagged') {
-      comment.contextValue = 'flagged';
-    }
 
     // Configure the thread
     this.currentThread.canReply = false;

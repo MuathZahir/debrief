@@ -139,8 +139,7 @@ export function activate(context: vscode.ExtensionContext) {
   // ── Timeline sidebar ───────────────────────────────────────────────────
   const timelineProvider = new TimelineViewProvider(
     context.extensionUri,
-    engine,
-    followMode
+    engine
   );
   context.subscriptions.push(
     vscode.window.registerWebviewViewProvider(
@@ -181,8 +180,11 @@ export function activate(context: vscode.ExtensionContext) {
 
     if (action === 'Walk Me Through It') {
       loadedTracePath = traceUri.fsPath;
+      session.tracePath = traceUri.fsPath;
       engine.load(session);
       await engine.goToStep(0);
+      // Auto-open the Debrief sidebar
+      await vscode.commands.executeCommand('debrief.timeline.focus');
     } else if (action === 'View Summary') {
       const summaryPath = path.join(traceDir, 'summary.md');
       try {
@@ -298,6 +300,8 @@ export function activate(context: vscode.ExtensionContext) {
       if (action === 'Walk Me Through It') {
         // Engine already has events via appendEvents — restart from beginning
         await engine.goToStep(0);
+        // Auto-open the Debrief sidebar
+        await vscode.commands.executeCommand('debrief.timeline.focus');
       }
     }
   });
@@ -352,6 +356,7 @@ export function activate(context: vscode.ExtensionContext) {
       }
 
       loadedTracePath = filePath;
+      session.tracePath = filePath;
       engine.load(session);
 
       const fileCount = new Set(
@@ -364,6 +369,9 @@ export function activate(context: vscode.ExtensionContext) {
 
       // Navigate to the first step without playing TTS
       await engine.goToStep(0, { skipTts: true });
+
+      // Auto-open the Debrief sidebar
+      await vscode.commands.executeCommand('debrief.timeline.focus');
     })
   );
 
@@ -453,100 +461,6 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('debrief.stopServer', () => {
       httpServer.stop();
       vscode.window.showInformationMessage('Debrief server stopped');
-    })
-  );
-
-  // Export Review
-  context.subscriptions.push(
-    vscode.commands.registerCommand('debrief.exportReview', async () => {
-      if (!engine.isLoaded) {
-        vscode.window.showWarningMessage(
-          'Debrief: No replay session loaded.'
-        );
-        return;
-      }
-
-      const reviewData = engine.exportReview();
-      if (reviewData.length === 0) {
-        vscode.window.showInformationMessage(
-          'Debrief: No steps have been reviewed yet.'
-        );
-        return;
-      }
-
-      // Determine output directory
-      let outputDir: string;
-      if (loadedTracePath) {
-        outputDir = path.dirname(loadedTracePath);
-      } else if (workspaceRoot) {
-        outputDir = path.join(workspaceRoot, '.debrief', 'replay');
-      } else {
-        // Fall back to asking user
-        const saveUri = await vscode.window.showSaveDialog({
-          defaultUri: vscode.Uri.file('review.json'),
-          filters: { 'JSON files': ['json'] },
-          saveLabel: 'Export Review',
-        });
-        if (!saveUri) return;
-        outputDir = path.dirname(saveUri.fsPath);
-      }
-
-      await fs.promises.mkdir(outputDir, { recursive: true });
-      const reviewPath = path.join(outputDir, 'review.json');
-
-      const reviewOutput = {
-        exportedAt: new Date().toISOString(),
-        summary: engine.getReviewSummary(),
-        reviews: reviewData,
-      };
-
-      await fs.promises.writeFile(
-        reviewPath,
-        JSON.stringify(reviewOutput, null, 2),
-        'utf-8'
-      );
-
-      const openAction = await vscode.window.showInformationMessage(
-        `Debrief: Review exported to ${path.basename(reviewPath)}`,
-        'Open File'
-      );
-
-      if (openAction === 'Open File') {
-        const doc = await vscode.workspace.openTextDocument(reviewPath);
-        await vscode.window.showTextDocument(doc);
-      }
-    })
-  );
-
-  // Approve Current Step
-  context.subscriptions.push(
-    vscode.commands.registerCommand('debrief.approveCurrentStep', () => {
-      const event = engine.currentEvent;
-      if (event) {
-        engine.approveStep(event.id);
-        // Refresh the inline card to show updated state
-        if (engine.isLoaded) {
-          engine.goToStep(engine.currentIndex);
-        }
-      }
-    })
-  );
-
-  // Flag Current Step
-  context.subscriptions.push(
-    vscode.commands.registerCommand('debrief.flagCurrentStep', async () => {
-      const event = engine.currentEvent;
-      if (event) {
-        const comment = await vscode.window.showInputBox({
-          prompt: 'Add a comment for this flagged step (optional)',
-          placeHolder: 'Why are you flagging this step?',
-        });
-        engine.flagStep(event.id, comment);
-        // Refresh the inline card to show updated state
-        if (engine.isLoaded) {
-          engine.goToStep(engine.currentIndex);
-        }
-      }
     })
   );
 }

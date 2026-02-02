@@ -2,8 +2,6 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import type { ReplayEngine } from '../replay/engine';
-import type { FollowModeController } from '../replay/followMode';
-import { detectRisks, type RiskFlag } from '../replay/riskDetector';
 
 /**
  * WebviewViewProvider for the Debrief Replay timeline sidebar.
@@ -16,17 +14,14 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
 
   private view: vscode.WebviewView | null = null;
   private engine: ReplayEngine;
-  private followMode: FollowModeController;
   private extensionUri: vscode.Uri;
 
   constructor(
     extensionUri: vscode.Uri,
-    engine: ReplayEngine,
-    followMode: FollowModeController
+    engine: ReplayEngine
   ) {
     this.extensionUri = extensionUri;
     this.engine = engine;
-    this.followMode = followMode;
 
     // Listen to engine events and push updates to the webview
     engine.onStepChanged(() => this.updateWebview());
@@ -34,8 +29,28 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
     engine.onSessionCleared(() => this.clearWebview());
     engine.onPlayStateChanged(() => this.updateWebview());
     engine.onEventsAppended(() => this.updateWebview());
-    engine.onReviewChanged(() => this.updateWebview());
-    followMode.onFollowModeChanged(() => this.updateWebview());
+
+    // Forward file transition events to webview
+    engine.onFileTransition((transition) => {
+      if (this.view) {
+        this.view.webview.postMessage({
+          command: transition.show ? 'showTransition' : 'hideTransition',
+          fileName: transition.fileName,
+        });
+      }
+    });
+
+    // Forward pre-generation progress events to webview
+    engine.onPregenProgress((progress) => {
+      if (this.view) {
+        this.view.webview.postMessage({
+          command: 'updatePregenProgress',
+          current: progress.current,
+          total: progress.total,
+          status: progress.status,
+        });
+      }
+    });
   }
 
   resolveWebviewView(
@@ -55,7 +70,7 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
     webviewView.webview.html = this.getHtml(webviewView.webview);
 
     // Handle messages from the webview
-    webviewView.webview.onDidReceiveMessage((msg) => {
+    webviewView.webview.onDidReceiveMessage(async (msg) => {
       switch (msg.command) {
         case 'goToStep':
           this.engine.goToStep(msg.index);
@@ -69,20 +84,11 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
         case 'togglePlayPause':
           this.engine.togglePlayPause();
           break;
-        case 'setSpeed':
-          this.engine.setSpeed(msg.speed);
+        case 'saveComment':
+          await this.engine.saveComment(msg.eventId, msg.comment);
           break;
-        case 'toggleFollowMode':
-          this.followMode.toggle();
-          break;
-        case 'approveStep':
-          this.engine.approveStep(msg.eventId);
-          break;
-        case 'flagStep':
-          this.engine.flagStep(msg.eventId, msg.comment);
-          break;
-        case 'clearReview':
-          this.engine.clearReview(msg.eventId);
+        case 'loadReplay':
+          vscode.commands.executeCommand('debrief.loadReplay');
           break;
       }
     });
@@ -110,14 +116,11 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
         title: e.title,
         narration: e.narration,
         filePath: e.filePath,
-        risks: detectRisks(e),
-        review: this.engine.getReviewState(e.id),
+        comment: e.comment,
+        risks: e.risks,  // Agent-specified risks (from trace file)
       })),
       currentIndex: this.engine.currentIndex,
       playState: this.engine.playState,
-      speed: this.engine.speed,
-      followEnabled: this.followMode.isEnabled,
-      reviewSummary: this.engine.getReviewSummary(),
     });
   }
 
