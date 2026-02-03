@@ -5,6 +5,26 @@ All notable changes to Debrief will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2025-02-03
+
+### Added
+- **Load Replay Button** - Click button in sidebar instead of using command palette
+- **Step Comments** - Add feedback on any step, saved directly to trace file
+- **Smooth Transitions** - Visual indicator when switching between files
+- **Highlight Animation** - Lines fade in smoothly when highlighted
+- **Auto-open Sidebar** - Sidebar opens automatically when loading replay
+- **Agent-specified Risks** - Agents can mark risky steps in trace with `risks` field
+- **Trace Authoring Skill** - Install via `npx skills add MuathZahir/debrief/skills/debrief-trace-authoring`
+
+### Changed
+- File watcher detects `.debrief/replay/trace.jsonl` automatically and shows notification
+- Clicking "Walk Me Through It" notification now auto-opens sidebar
+- Risk detection is now explicit (agents specify in trace) instead of auto-detected
+
+### Removed
+- Automatic risk detection patterns (security, publicApi, migration, etc.)
+- Approve/Flag review workflow (replaced with simpler comment system)
+
 ## [0.3.0] - 2024-01-30
 
 ### Added

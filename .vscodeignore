@@ -19,6 +19,12 @@ scripts/**
 # Claude Code research/specs
 .claude/**
 
+# Test/dev trace files
+.debrief/**
+
+# Include skills for reference (don't ignore)
+!skills/**
+
 # Build artifacts
 *.vsix
 

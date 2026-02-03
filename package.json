@@ -2,9 +2,13 @@
   "name": "debrief",
   "displayName": "Debrief",
   "description": "Narrated code walkthroughs with TTS — AI-generated voice explains your code with synchronized line highlights.",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "publisher": "muath-zaher",
   "license": "MIT",
+  "galleryBanner": {
+    "color": "#1a1a2e",
+    "theme": "dark"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/MuathZahir/debrief"

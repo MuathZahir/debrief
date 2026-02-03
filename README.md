@@ -2,15 +2,22 @@
 
 **Narrated code walkthroughs in VS Code** — Load a trace file and get a guided tour of your codebase with synchronized TTS narration and line-by-line highlights.
 
-<!-- ![Debrief Demo](docs/demo.gif) -->
-
 ## Features
 
 - **TTS Narration** — AI-generated voice explains the code as you step through
 - **Synchronized Highlights** — Lines highlight exactly when the narration mentions them
 - **Timeline View** — Visual overview of all steps in the sidebar
+- **Step Comments** — Add feedback on any step, saved to the trace file
+- **Smooth Transitions** — Visual indicator when switching between files
+- **Auto-Detection** — Notifies you when an agent creates a trace
 - **Keyboard Navigation** — `Alt+Left/Right` to move between steps
-- **Natural Flow** — Narration sounds like a senior engineer explaining code
+
+## Requirements
+
+> **OpenAI API Key Required** — Debrief uses OpenAI's TTS API for voice narration. You'll need an API key to use this extension. Set it in VS Code Settings or as an environment variable.
+
+- VS Code 1.85.0+
+- OpenAI API key (for TTS narration)
 
 ## Installation
 
@@ -34,17 +41,54 @@ Press `F5` to launch the Extension Development Host.
 
 ## Quick Start
 
-1. Set your OpenAI API key:
+1. **Set your OpenAI API key:**
    - VS Code Settings → `debrief.openaiApiKey`
    - Or set `OPENAI_API_KEY` environment variable
 
-2. Open your project in VS Code
+2. **Open your project** in VS Code
 
-3. Press `Ctrl+Shift+P` → **"Debrief: Load Replay..."**
+3. **Load a replay:**
+   - Open the **Debrief** panel in the sidebar (play icon)
+   - Click the **"Load Replay"** button
+   - Select a `.jsonl` trace file
 
-4. Select a `.jsonl` trace file
+   *Or use `Ctrl+Shift+P` → "Debrief: Load Replay..."*
 
-5. Use `Alt+Right` / `Alt+Left` to navigate steps
+4. **Navigate:** Use `Alt+Right` / `Alt+Left` to step through, or click steps in the timeline
+
+5. **Add feedback:** Click the comment icon on any step to leave notes
+
+## For AI Agents
+
+Debrief integrates seamlessly with AI coding agents like Claude Code.
+
+### Install the Trace Authoring Skill
+
+Give your agent the knowledge to create high-quality traces:
+
+```bash
+npx skills add MuathZahir/debrief/skills/debrief-trace-authoring
+```
+
+### Automatic Detection
+
+When an agent writes a trace to `.debrief/replay/trace.jsonl` in your workspace:
+
+1. Debrief detects the file automatically
+2. A notification appears: "Agent completed — changed X files"
+3. Click **"Walk Me Through It"** to start the replay
+4. The sidebar opens and playback begins
+
+### HTTP Server Integration
+
+Agents can also stream events in real-time:
+
+```bash
+# Send a highlight event
+curl -X POST http://localhost:53931/event \
+  -H "Content-Type: application/json" \
+  -d '{"type":"show","filePath":"src/index.ts","startLine":10,"endLine":20}'
+```
 
 ## Keyboard Shortcuts
 
@@ -73,7 +117,7 @@ Traces are JSONL files where each line is a step:
 | `say` | Narration only, no file changes |
 | `openFile` | Open a file without highlighting |
 | `showDiff` | Show a diff between two versions |
-| `sectionStart` | Begin a logical section (silent) |
+| `sectionStart` | Begin a logical section (groups steps in timeline) |
 | `sectionEnd` | End a section |
 
 ### Line References
@@ -87,16 +131,6 @@ Highlight specific lines when spoken using `<line:X>text</line:X>`:
 - Line 42 highlights in amber when "This function" is spoken
 - Highlight stays visible through "backoff"
 - Text inside tags is spoken naturally
-
-**Important:** Include the full explanation inside the tags so highlights last long enough:
-
-```
-// Too short - highlight flashes briefly
-"<line:42>This</line:42> handles retries"
-
-// Good - highlight visible during explanation
-"<line:42>This handles retries with exponential backoff</line:42>"
-```
 
 ### Full Event Schema
 
@@ -113,7 +147,11 @@ interface TraceEvent {
     endLine: number;
     endCol: number;
   };
-  metadata?: Record<string, unknown>;
+  comment?: string;              // User feedback (saved when user adds comment)
+  risks?: Array<{                // Agent-specified risks
+    category: string;            // e.g., "security", "breaking-change"
+    label: string;               // Human-readable description
+  }>;
 }
 ```
 
@@ -128,34 +166,13 @@ interface TraceEvent {
 | `debrief.serverPort` | `53931` | HTTP server port |
 | `debrief.autoStartServer` | `true` | Auto-start HTTP server |
 
-## Agent Integration
-
-The extension runs a local HTTP server for AI agent integration:
-
-```bash
-# Send a highlight event
-curl -X POST http://localhost:53931/event \
-  -H "Content-Type: application/json" \
-  -d '{"type":"show","filePath":"src/index.ts","startLine":10,"endLine":20}'
-
-# Clear highlights
-curl -X POST http://localhost:53931/event \
-  -H "Content-Type: application/json" \
-  -d '{"type":"clear"}'
-```
-
 ## Examples
 
-The `examples/` folder contains sample traces:
+The `examples/` folder contains sample traces to try:
 
+- `sample-walkthrough.jsonl` — Comprehensive example walking through Debrief's own code
 - `mcp-server-walkthrough.jsonl` — MCP server implementation walkthrough
 - `trace-natural.jsonl` — Natural narration style example
-
-## Requirements
-
-- VS Code 1.85.0+
-- OpenAI API key (for TTS)
-- Node.js 18+ (development only)
 
 ## Contributing
 
