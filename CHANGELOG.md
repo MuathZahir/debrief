@@ -14,7 +14,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Highlight Animation** - Lines fade in smoothly when highlighted
 - **Auto-open Sidebar** - Sidebar opens automatically when loading replay
 - **Agent-specified Risks** - Agents can mark risky steps in trace with `risks` field
-- **Trace Authoring Skill** - Install via `npx skills add MuathZahir/debrief/skills/debrief-trace-authoring`
+- **Trace Authoring Skill** - Install via `npx skills add MuathZahir/debrief`
 
 ### Changed
 - File watcher detects `.debrief/replay/trace.jsonl` automatically and shows notification

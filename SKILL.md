@@ -1,5 +1,5 @@
 ---
-name: debrief-trace-authoring
+name: debrief
 description: This skill should be used when the user asks to "create a Debrief trace", "generate a code walkthrough", "make a narrated code explanation", "create a replay trace", "write trace narration", or mentions Debrief traces, JSONL trace files, or code walkthrough generation. Provides comprehensive guidance for writing natural, engaging narration that sounds like a senior engineer explaining code.
 version: 2.2.0
 ---

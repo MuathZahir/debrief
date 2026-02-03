@@ -22,8 +22,8 @@ scripts/**
 # Test/dev trace files
 .debrief/**
 
-# Include skills for reference (don't ignore)
-!skills/**
+# Skill file (distributed separately via MuathZahir/debrief repo)
+SKILL.md
 
 # Build artifacts
 *.vsix

@@ -67,7 +67,7 @@ Debrief integrates seamlessly with AI coding agents like Claude Code.
 Give your agent the knowledge to create high-quality traces:
 
 ```bash
-npx skills add MuathZahir/debrief/skills/debrief-trace-authoring
+npx skills add MuathZahir/debrief
 ```
 
 ### Automatic Detection
