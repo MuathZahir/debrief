@@ -1,10 +1,24 @@
 ---
 name: debrief
 description: This skill should be used when the user asks to "create a Debrief trace", "generate a code walkthrough", "make a narrated code explanation", "create a replay trace", "write trace narration", or mentions Debrief traces, JSONL trace files, or code walkthrough generation. Provides comprehensive guidance for writing natural, engaging narration that sounds like a senior engineer explaining code.
-version: 2.2.0
+version: 2.3.0
+argument-hint: [what to debrief - optional]
 ---
 
 # Debrief Trace Authoring
+
+## What to Debrief
+
+**Topic/scope:** $ARGUMENTS
+
+**CRITICAL:** Do NOT ask the user what they want to debrief or say "the skill is loaded." Act immediately:
+
+- **If a topic/scope is provided above:** Create a trace for that specific topic. Read the relevant files, understand the code, and generate the trace JSONL file immediately.
+- **If no topic/scope is provided (empty or blank above):** Debrief **everything you have done in this conversation so far.** Look at all files you created, modified, or discussed. Walk through each change, explaining what was done and why. Generate the trace JSONL file immediately.
+
+In both cases, start working right away. Read the code, plan the walkthrough structure, and write the trace file to `.debrief/replay/`. Never ask "what would you like me to debrief?" — the answer is either the argument above or the full conversation history.
+
+---
 
 This skill teaches how to create Debrief replay traces with natural, engaging narration. The goal is to sound like a senior engineer explaining code to a colleague, not like documentation or a robot.
 

@@ -9,12 +9,26 @@ import type { ReplayEngine } from '../replay/engine';
  * Renders the step list, narration panel, and navigation/playback controls.
  * Communicates with the webview via postMessage.
  */
+export interface TraceNotificationInfo {
+  fileName: string;
+  stepCount: number;
+  fileCount: number;
+  tracePath?: string;
+  summaryPath?: string;
+  summary?: string;
+}
+
 export class TimelineViewProvider implements vscode.WebviewViewProvider {
   public static readonly viewType = 'debrief.timeline';
 
   private view: vscode.WebviewView | null = null;
   private engine: ReplayEngine;
   private extensionUri: vscode.Uri;
+
+  // Notification action resolution
+  private _pendingNotificationResolve: ((action: string) => void) | null = null;
+  // Queued notification for delivery after webview ready
+  private _pendingNotification: TraceNotificationInfo | null = null;
 
   constructor(
     extensionUri: vscode.Uri,
@@ -72,6 +86,18 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
     // Handle messages from the webview
     webviewView.webview.onDidReceiveMessage(async (msg) => {
       switch (msg.command) {
+        case 'ready':
+          // Webview JS has loaded and registered its message listener.
+          // Push current state if a session is already loaded.
+          if (this.engine.isLoaded) {
+            this.updateWebview();
+          }
+          // Deliver any queued notification that was sent before JS loaded
+          if (this._pendingNotification) {
+            this.sendNotificationToWebview(this._pendingNotification);
+            this._pendingNotification = null;
+          }
+          break;
         case 'goToStep':
           this.engine.goToStep(msg.index);
           break;
@@ -90,14 +116,18 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
         case 'loadReplay':
           vscode.commands.executeCommand('debrief.loadReplay');
           break;
+        case 'notificationAction':
+          if (this._pendingNotificationResolve) {
+            this._pendingNotificationResolve(msg.action);
+            this._pendingNotificationResolve = null;
+          }
+          break;
       }
     });
 
-    // If a session is already loaded, push state immediately
-    if (this.engine.isLoaded) {
-      // Small delay to let the webview initialize
-      setTimeout(() => this.updateWebview(), 100);
-    }
+    // State will be pushed when the webview sends the 'ready' message.
+    // No timer needed — the ready handshake ensures the webview has
+    // registered its message listener before we send state.
   }
 
   /**
@@ -133,6 +163,42 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
     }
 
     this.view.webview.postMessage({ command: 'clearSession' });
+  }
+
+  /**
+   * Show a rich trace-detected notification card in the sidebar webview.
+   * If the webview JS hasn't loaded yet, queues it for delivery on 'ready'.
+   */
+  showTraceNotification(info: TraceNotificationInfo): void {
+    // Always queue — the webview JS may not have loaded yet even if this.view exists
+    this._pendingNotification = info;
+
+    // Also try to send immediately in case the webview is already initialized
+    if (this.view) {
+      this.sendNotificationToWebview(info);
+    }
+  }
+
+  private sendNotificationToWebview(info: TraceNotificationInfo): void {
+    if (!this.view) {
+      return;
+    }
+    this.view.webview.postMessage({
+      command: 'showTraceNotification',
+      fileName: info.fileName,
+      stepCount: info.stepCount,
+      fileCount: info.fileCount,
+    });
+  }
+
+  /**
+   * Returns a promise that resolves when the user clicks a notification action.
+   * Resolves with 'walkthrough', 'summary', or 'dismiss'.
+   */
+  waitForNotificationAction(): Promise<string> {
+    return new Promise<string>((resolve) => {
+      this._pendingNotificationResolve = resolve;
+    });
   }
 
   /**

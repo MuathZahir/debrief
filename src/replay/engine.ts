@@ -30,6 +30,9 @@ export class ReplayEngine {
   // Section depth tracking for smooth transitions
   private _currentSectionDepth: number = 0;
 
+  // Navigation epoch — incremented on each goToStep call to detect stale handlers
+  private _navigationEpoch: number = 0;
+
   // TTS pre-generation
   private _ttsPreloader: TtsPreloader;
 
@@ -162,6 +165,7 @@ export class ReplayEngine {
   clear(): void {
     this.clearAdvanceTimer();
     this.clearTtsCompletionListener();
+    this.context.ttsPlayer.setAllowedEventId(null);
     this._ttsPreloader.reset();
     this._playState = 'stopped';
     this._currentSectionDepth = 0;
@@ -179,9 +183,13 @@ export class ReplayEngine {
       return;
     }
 
+    // Increment navigation epoch so stale handler executions can be detected
+    const epoch = ++this._navigationEpoch;
+
     // Cancel any pending advance timer and TTS completion listener
     this.clearAdvanceTimer();
     this.clearTtsCompletionListener();
+    this.context.ttsPlayer.stop();
 
     this._currentIndex = index;
     const event = this.events[index];
@@ -197,6 +205,10 @@ export class ReplayEngine {
     if (!this._ttsPreloader.isReady(event.id) && event.narration?.trim()) {
       this._ttsPreloader.prioritize(event.id);
     }
+
+    // Lock TTS to this event — stale handlers from a previous goToStep
+    // will be blocked from calling speakAsync for the wrong event
+    this.context.ttsPlayer.setAllowedEventId(event.id);
 
     // Execute the handler for this event type
     const handler = getHandler(event.type);
@@ -219,6 +231,13 @@ export class ReplayEngine {
       this.context.outputChannel.appendLine(
         `[engine] No handler for event type: ${event.type}`
       );
+    }
+
+    // If another goToStep was called during handler execution, this
+    // invocation is stale. The allowedEventId guard already prevented
+    // stale handlers from starting audio, so just bail out.
+    if (epoch !== this._navigationEpoch) {
+      return;
     }
 
     // Notify UI
@@ -282,6 +301,12 @@ export class ReplayEngine {
     // Already on a step - start TTS and schedule advance
     const event = this.currentEvent;
     if (event) {
+      // Capture epoch to detect if user navigates during handler execution
+      const epoch = this._navigationEpoch;
+
+      // Lock TTS to this event
+      this.context.ttsPlayer.setAllowedEventId(event.id);
+
       // Re-execute the handler to start TTS (it was likely already played when user manually clicked)
       const handler = getHandler(event.type);
       if (handler) {
@@ -293,6 +318,12 @@ export class ReplayEngine {
           );
         }
       }
+
+      // If user navigated away during handler execution, don't schedule advance
+      if (epoch !== this._navigationEpoch) {
+        return;
+      }
+
       this.waitForTtsAndScheduleAdvance(event);
     }
   }

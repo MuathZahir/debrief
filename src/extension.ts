@@ -168,24 +168,33 @@ export function activate(context: vscode.ExtensionContext) {
       return;
     }
 
-    const summaryText = buildNotificationSummary(session);
     const traceDir = path.dirname(traceUri.fsPath);
+    const stepCount = session.events.length;
+    const fileCount = new Set(
+      session.events.filter((e) => e.filePath).map((e) => e.filePath)
+    ).size;
 
-    const action = await vscode.window.showInformationMessage(
-      `Debrief: ${summaryText}`,
-      'Walk Me Through It',
-      'View Summary',
-      'Dismiss'
-    );
+    // Show rich notification in the sidebar instead of an OS dialog
+    await vscode.commands.executeCommand('debrief.timeline.focus');
+    timelineProvider.showTraceNotification({
+      fileName: path.basename(traceUri.fsPath),
+      stepCount,
+      fileCount,
+      tracePath: traceUri.fsPath,
+      summaryPath: path.join(traceDir, 'summary.md'),
+      summary: session.summary,
+    });
 
-    if (action === 'Walk Me Through It') {
+    // Wait for user action from the webview
+    const action = await timelineProvider.waitForNotificationAction();
+
+    if (action === 'walkthrough') {
       loadedTracePath = traceUri.fsPath;
       session.tracePath = traceUri.fsPath;
       engine.load(session);
-      await engine.goToStep(0);
-      // Auto-open the Debrief sidebar
-      await vscode.commands.executeCommand('debrief.timeline.focus');
-    } else if (action === 'View Summary') {
+      // Sidebar is already focused — ready handshake will deliver state
+      await engine.play();
+    } else if (action === 'summary') {
       const summaryPath = path.join(traceDir, 'summary.md');
       try {
         await fs.promises.access(summaryPath);
@@ -289,19 +298,24 @@ export function activate(context: vscode.ExtensionContext) {
         events: session.events,
         metadata: session.metadata,
       };
-      const summaryText = buildNotificationSummary(replaySession);
+      const stepCount = replaySession.events.length;
+      const fileCount = new Set(
+        replaySession.events.filter((e) => e.filePath).map((e) => e.filePath)
+      ).size;
 
-      const action = await vscode.window.showInformationMessage(
-        `Debrief: ${summaryText}`,
-        'Walk Me Through It',
-        'Dismiss'
-      );
+      // Show rich notification in the sidebar
+      await vscode.commands.executeCommand('debrief.timeline.focus');
+      timelineProvider.showTraceNotification({
+        fileName: 'trace.jsonl',
+        stepCount,
+        fileCount,
+      });
 
-      if (action === 'Walk Me Through It') {
-        // Engine already has events via appendEvents — restart from beginning
-        await engine.goToStep(0);
-        // Auto-open the Debrief sidebar
-        await vscode.commands.executeCommand('debrief.timeline.focus');
+      const action = await timelineProvider.waitForNotificationAction();
+
+      if (action === 'walkthrough') {
+        // Engine already has events via appendEvents — play from beginning
+        await engine.play();
       }
     }
   });

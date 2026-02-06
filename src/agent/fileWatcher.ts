@@ -10,13 +10,14 @@ export interface TraceDetectedEvent {
 // ── TraceFileWatcher ──────────────────────────────────────────────────────────
 
 /**
- * Watches for `.debrief/replay/trace.jsonl` files across all workspace
- * folders. Fires `onTraceDetected` when a trace file is created or modified,
- * with a 500ms debounce to handle incremental agent writes.
+ * Watches for `.jsonl` files in `.debrief/replay/` (and subdirectories)
+ * across all workspace folders. Fires `onTraceDetected` when a trace file
+ * is created or modified, with a 500ms per-file debounce to handle
+ * incremental agent writes.
  */
 export class TraceFileWatcher {
   private watcher: vscode.FileSystemWatcher | null = null;
-  private debounceTimer: ReturnType<typeof setTimeout> | null = null;
+  private debounceTimers: Map<string, ReturnType<typeof setTimeout>> = new Map();
   private readonly DEBOUNCE_MS = 500;
 
   /**
@@ -36,7 +37,7 @@ export class TraceFileWatcher {
     }
 
     this.watcher = vscode.workspace.createFileSystemWatcher(
-      '**/.debrief/replay/trace.jsonl'
+      '**/.debrief/replay/**/*.jsonl'
     );
 
     this.watcher.onDidCreate((uri) => this.handleChange(uri));
@@ -44,22 +45,25 @@ export class TraceFileWatcher {
   }
 
   stop(): void {
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
-      this.debounceTimer = null;
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
     }
+    this.debounceTimers.clear();
     this.watcher?.dispose();
     this.watcher = null;
   }
 
   private handleChange(uri: vscode.Uri): void {
-    // Debounce: agents may write the file incrementally
-    if (this.debounceTimer) {
-      clearTimeout(this.debounceTimer);
+    const key = uri.toString();
+
+    // Debounce per file: agents may write the file incrementally
+    const existing = this.debounceTimers.get(key);
+    if (existing) {
+      clearTimeout(existing);
     }
 
-    this.debounceTimer = setTimeout(() => {
-      this.debounceTimer = null;
+    this.debounceTimers.set(key, setTimeout(() => {
+      this.debounceTimers.delete(key);
 
       // Check suppress flag (set by HTTP server when it writes the file)
       if (this.suppressNext) {
@@ -69,7 +73,7 @@ export class TraceFileWatcher {
 
       const directoryUri = vscode.Uri.joinPath(uri, '..');
       this._onTraceDetected.fire({ traceUri: uri, directoryUri });
-    }, this.DEBOUNCE_MS);
+    }, this.DEBOUNCE_MS));
   }
 
   dispose(): void {

@@ -25,6 +25,12 @@
   const transitionBanner = document.getElementById('transitionBanner');
   const transitionText = document.getElementById('transitionText');
   const btnLoadReplay = document.getElementById('btnLoadReplay');
+  const traceNotification = document.getElementById('traceNotification');
+  const traceNotificationDetail = document.getElementById('traceNotificationDetail');
+  const traceNotificationFilename = document.getElementById('traceNotificationFilename');
+  const btnWalkthrough = document.getElementById('btnWalkthrough');
+  const btnViewSummary = document.getElementById('btnViewSummary');
+  const btnDismissNotification = document.getElementById('btnDismissNotification');
 
   // ── State ──────────────────────────────────────────────────────────────
   let currentIndex = -1;
@@ -394,6 +400,21 @@
     vscode.postMessage({ command: 'loadReplay' });
   });
 
+  btnWalkthrough.addEventListener('click', function () {
+    traceNotification.classList.remove('visible');
+    vscode.postMessage({ command: 'notificationAction', action: 'walkthrough' });
+  });
+
+  btnViewSummary.addEventListener('click', function () {
+    traceNotification.classList.remove('visible');
+    vscode.postMessage({ command: 'notificationAction', action: 'summary' });
+  });
+
+  btnDismissNotification.addEventListener('click', function () {
+    traceNotification.classList.remove('visible');
+    vscode.postMessage({ command: 'notificationAction', action: 'dismiss' });
+  });
+
   // ── Messages from extension ────────────────────────────────────────────
 
   window.addEventListener('message', function (event) {
@@ -407,6 +428,8 @@
         if (currentIndex >= 0) {
           visitedSteps.add(currentIndex);
         }
+        // Hide notification card when session state arrives
+        traceNotification.classList.remove('visible');
         render();
         break;
 
@@ -431,6 +454,14 @@
         updatePregenProgress();
         break;
 
+      case 'showTraceNotification':
+        traceNotificationDetail.textContent = msg.stepCount + ' steps across ' + msg.fileCount + ' file' + (msg.fileCount !== 1 ? 's' : '');
+        traceNotificationFilename.textContent = msg.fileName || '';
+        traceNotification.classList.add('visible');
+        // Hide the empty state while notification is showing
+        emptyState.style.display = 'none';
+        break;
+
       case 'showTransition':
         transitionText.textContent = 'Opening ' + msg.fileName + '...';
         transitionBanner.style.display = 'flex';
@@ -444,4 +475,7 @@
 
   // ── Initial render ─────────────────────────────────────────────────────
   render();
+
+  // Signal to the extension that the webview is ready to receive messages
+  vscode.postMessage({ command: 'ready' });
 })();

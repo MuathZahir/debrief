@@ -1,38 +1,45 @@
-import * as vscode from 'vscode';
-import * as fs from 'fs';
-import * as path from 'path';
-import * as os from 'os';
-import * as dotenv from 'dotenv';
-import { spawn, ChildProcess } from 'child_process';
+import * as vscode from "vscode";
+import * as fs from "fs";
+import * as path from "path";
+import * as os from "os";
+import * as dotenv from "dotenv";
+import { spawn, ChildProcess } from "child_process";
 
 /**
  * TTS audio player for replay narration.
  * Uses OpenAI TTS API to generate speech and plays via webview audio.
  */
-export type TtsVoice = 'alloy' | 'echo' | 'fable' | 'onyx' | 'nova' | 'shimmer';
-
+export type TtsVoice = "alloy" | "echo" | "fable" | "onyx" | "nova" | "shimmer";
 
 export class TtsPlayer {
   private audioCache: Map<string, string> = new Map(); // cacheKey -> tempFilePath
   private isEnabled = true;
   private outputChannel: vscode.OutputChannel;
   private tempDir: string;
-  private voice: TtsVoice = 'alloy';
+  private voice: TtsVoice = "alloy";
   private speed: number = 1.0;
   private isPlaying = false;
   private currentRequestId: number = 0;
   private currentProcess: ChildProcess | null = null;
 
+  // When set, speakAsync only accepts calls with a matching eventId.
+  // This prevents stale handlers (from a superseded goToStep) from
+  // starting audio for the wrong event.
+  private _allowedEventId: string | null = null;
+
   // Event fired when playback completes (naturally or via stop)
-  private readonly _onPlaybackComplete = new vscode.EventEmitter<{ requestId: number; cancelled: boolean }>();
+  private readonly _onPlaybackComplete = new vscode.EventEmitter<{
+    requestId: number;
+    cancelled: boolean;
+  }>();
   public readonly onPlaybackComplete = this._onPlaybackComplete.event;
 
   constructor(
     context: vscode.ExtensionContext,
-    outputChannel: vscode.OutputChannel
+    outputChannel: vscode.OutputChannel,
   ) {
     this.outputChannel = outputChannel;
-    this.tempDir = path.join(os.tmpdir(), 'debrief-tts');
+    this.tempDir = path.join(os.tmpdir(), "debrief-tts");
 
     // Ensure temp directory exists
     fs.mkdirSync(this.tempDir, { recursive: true });
@@ -45,15 +52,17 @@ export class TtsPlayer {
     // Listen for configuration changes
     context.subscriptions.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('debrief.enableTts') ||
-            e.affectsConfiguration('debrief.ttsVoice') ||
-            e.affectsConfiguration('debrief.ttsSpeed')) {
+        if (
+          e.affectsConfiguration("debrief.enableTts") ||
+          e.affectsConfiguration("debrief.ttsVoice") ||
+          e.affectsConfiguration("debrief.ttsSpeed")
+        ) {
           this.loadConfig();
           if (!this.isEnabled) {
             this.stop();
           }
         }
-      })
+      }),
     );
   }
 
@@ -61,11 +70,13 @@ export class TtsPlayer {
    * Load configuration from VS Code settings.
    */
   private loadConfig(): void {
-    const config = vscode.workspace.getConfiguration('debrief');
-    this.isEnabled = config.get<boolean>('enableTts', true);
-    this.voice = config.get<TtsVoice>('ttsVoice', 'alloy');
-    this.speed = config.get<number>('ttsSpeed', 1.0);
-    this.outputChannel.appendLine(`[TtsPlayer] Config loaded - enabled: ${this.isEnabled}, voice: ${this.voice}, speed: ${this.speed}`);
+    const config = vscode.workspace.getConfiguration("debrief");
+    this.isEnabled = config.get<boolean>("enableTts", true);
+    this.voice = config.get<TtsVoice>("ttsVoice", "alloy");
+    this.speed = config.get<number>("ttsSpeed", 1.0);
+    this.outputChannel.appendLine(
+      `[TtsPlayer] Config loaded - enabled: ${this.isEnabled}, voice: ${this.voice}, speed: ${this.speed}`,
+    );
   }
 
   /**
@@ -75,7 +86,24 @@ export class TtsPlayer {
    * @param text The narration text to speak
    * @param eventId Unique ID for caching
    */
+  /**
+   * Set which event ID is allowed to call speakAsync.
+   * Calls with a non-matching eventId are silently ignored.
+   * Pass null to allow all calls (e.g., on session clear).
+   */
+  setAllowedEventId(id: string | null): void {
+    this._allowedEventId = id;
+  }
+
   speakAsync(text: string, eventId: string): void {
+    // Reject calls from stale handlers that are speaking for the wrong event
+    if (this._allowedEventId !== null && eventId !== this._allowedEventId) {
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Blocked stale speakAsync for "${eventId}" (current: "${this._allowedEventId}")`
+      );
+      return;
+    }
+
     // Stop any currently playing audio FIRST (before incrementing ID)
     // This ensures the completion event fires with the OLD request ID
     this.stop();
@@ -83,7 +111,7 @@ export class TtsPlayer {
     // Now increment request ID for the new request
     const requestId = ++this.currentRequestId;
 
-    this.speakWithRequestId(text, eventId, requestId).catch(err => {
+    this.speakWithRequestId(text, eventId, requestId).catch((err) => {
       // Only log if this was still the active request
       if (requestId === this.currentRequestId) {
         this.outputChannel.appendLine(`[TtsPlayer] Async speak error: ${err}`);
@@ -99,17 +127,21 @@ export class TtsPlayer {
    * @returns Path to the generated audio file
    */
   async generateOnly(text: string, eventId: string): Promise<string> {
-    this.outputChannel.appendLine(`[TtsPlayer] generateOnly() called - eventId: ${eventId}`);
+    this.outputChannel.appendLine(
+      `[TtsPlayer] generateOnly() called - eventId: ${eventId}`,
+    );
 
     if (!text.trim()) {
-      throw new Error('Empty text');
+      throw new Error("Empty text");
     }
 
     const cacheKey = this.getCacheKey(text);
     let audioFilePath = this.audioCache.get(cacheKey);
 
     if (audioFilePath && fs.existsSync(audioFilePath)) {
-      this.outputChannel.appendLine(`[TtsPlayer] Using cached audio: ${audioFilePath}`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Using cached audio: ${audioFilePath}`,
+      );
       return audioFilePath;
     }
 
@@ -141,8 +173,14 @@ export class TtsPlayer {
   /**
    * Internal: Generate and play TTS with request ID tracking for cancellation.
    */
-  private async speakWithRequestId(text: string, eventId: string, requestId: number): Promise<void> {
-    this.outputChannel.appendLine(`[TtsPlayer] speak() called - enabled: ${this.isEnabled}, eventId: ${eventId}, requestId: ${requestId}`);
+  private async speakWithRequestId(
+    text: string,
+    eventId: string,
+    requestId: number,
+  ): Promise<void> {
+    this.outputChannel.appendLine(
+      `[TtsPlayer] speak() called - enabled: ${this.isEnabled}, eventId: ${eventId}, requestId: ${requestId}`,
+    );
 
     if (!this.isEnabled) {
       this.outputChannel.appendLine(`[TtsPlayer] TTS is disabled in settings`);
@@ -175,7 +213,9 @@ export class TtsPlayer {
         audioFilePath = await this.generateTts(text, cacheKey);
         this.audioCache.set(cacheKey, audioFilePath);
       } catch (err) {
-        this.outputChannel.appendLine(`[TtsPlayer] Failed to generate TTS: ${err}`);
+        this.outputChannel.appendLine(
+          `[TtsPlayer] Failed to generate TTS: ${err}`,
+        );
         vscode.window.showWarningMessage(`TTS failed: ${err}`);
         // Defer completion to next tick so listener has time to be set up
         setImmediate(() => {
@@ -186,12 +226,16 @@ export class TtsPlayer {
         return;
       }
     } else {
-      this.outputChannel.appendLine(`[TtsPlayer] Using cached audio: ${audioFilePath}`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Using cached audio: ${audioFilePath}`,
+      );
     }
 
     // Before playing, check if we're still the current request
     if (requestId !== this.currentRequestId) {
-      this.outputChannel.appendLine(`[TtsPlayer] Request ${requestId} superseded by ${this.currentRequestId}, aborting playback`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Request ${requestId} superseded by ${this.currentRequestId}, aborting playback`,
+      );
       return;
     }
 
@@ -227,7 +271,10 @@ export class TtsPlayer {
 
     // Fire completion event if we were playing (cancelled)
     if (wasPlaying) {
-      this._onPlaybackComplete.fire({ requestId: this.currentRequestId, cancelled: true });
+      this._onPlaybackComplete.fire({
+        requestId: this.currentRequestId,
+        cancelled: true,
+      });
     }
   }
 
@@ -278,27 +325,30 @@ export class TtsPlayer {
   private async generateTts(text: string, cacheKey: string): Promise<string> {
     const apiKey = this.getApiKey();
     if (!apiKey) {
-      const errorMsg = 'OPENAI_API_KEY not configured. Set it in:\n' +
-        '1. VS Code settings: debrief.openaiApiKey\n' +
-        '2. Environment variable: OPENAI_API_KEY\n' +
-        '3. .env file in workspace root';
+      const errorMsg =
+        "OPENAI_API_KEY not configured. Set it in:\n" +
+        "1. VS Code settings: debrief.openaiApiKey\n" +
+        "2. Environment variable: OPENAI_API_KEY\n" +
+        "3. .env file in workspace root";
       this.outputChannel.appendLine(`[TtsPlayer] ERROR: ${errorMsg}`);
       throw new Error(errorMsg);
     }
 
-    this.outputChannel.appendLine(`[TtsPlayer] Generating TTS for: "${text.slice(0, 50)}..." (key: ${apiKey.slice(0, 8)}...)`);
+    this.outputChannel.appendLine(
+      `[TtsPlayer] Generating TTS for: "${text.slice(0, 50)}..." (key: ${apiKey.slice(0, 8)}...)`,
+    );
 
-    const response = await fetch('https://api.openai.com/v1/audio/speech', {
-      method: 'POST',
+    const response = await fetch("https://api.openai.com/v1/audio/speech", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: 'tts-1-hd',
+        model: "tts-1",
         voice: this.voice,
         input: text,
-        response_format: 'mp3',
+        response_format: "mp3",
         speed: this.speed,
       }),
     });
@@ -315,7 +365,9 @@ export class TtsPlayer {
     const filePath = path.join(this.tempDir, `${cacheKey}.mp3`);
     fs.writeFileSync(filePath, buffer);
 
-    this.outputChannel.appendLine(`[TtsPlayer] TTS saved to: ${filePath} (${Math.round(buffer.length / 1024)}KB)`);
+    this.outputChannel.appendLine(
+      `[TtsPlayer] TTS saved to: ${filePath} (${Math.round(buffer.length / 1024)}KB)`,
+    );
 
     return filePath;
   }
@@ -326,58 +378,76 @@ export class TtsPlayer {
    */
   private playAudioFile(filePath: string): Promise<void> {
     return new Promise((resolve, reject) => {
-      this.outputChannel.appendLine(`[TtsPlayer] Playing audio via system: ${filePath}`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Playing audio via system: ${filePath}`,
+      );
       this.isPlaying = true;
 
       let command: string;
       let args: string[];
 
       const platform = os.platform();
-      if (platform === 'win32') {
+      if (platform === "win32") {
         // Windows: Use PowerShell with Windows Media Player COM object (supports MP3)
         const escapedPath = filePath.replace(/'/g, "''");
-        command = 'powershell';
+        command = "powershell";
         args = [
-          '-NoProfile',
-          '-NonInteractive',
-          '-Command',
+          "-NoProfile",
+          "-NonInteractive",
+          "-Command",
           `Add-Type -AssemblyName PresentationCore; $player = New-Object System.Windows.Media.MediaPlayer; $player.Open([Uri]'${escapedPath}'); $player.Play(); Start-Sleep -Milliseconds 500; while ($player.Position -lt $player.NaturalDuration.TimeSpan) { Start-Sleep -Milliseconds 100 }; $player.Close()`,
         ];
-      } else if (platform === 'darwin') {
+      } else if (platform === "darwin") {
         // macOS: Use afplay
-        command = 'afplay';
+        command = "afplay";
         args = [filePath];
       } else {
         // Linux: Try mpv first, fall back to paplay
-        command = 'mpv';
-        args = ['--no-video', '--really-quiet', filePath];
+        command = "mpv";
+        args = ["--no-video", "--really-quiet", filePath];
       }
 
-      this.outputChannel.appendLine(`[TtsPlayer] Running: ${command} ${args.join(' ')}`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Running: ${command} ${args.join(" ")}`,
+      );
 
       const proc = spawn(command, args, {
-        stdio: 'ignore',
+        stdio: "ignore",
         detached: false,
       });
 
       this.currentProcess = proc;
 
-      proc.on('error', (err) => {
-        this.isPlaying = false;
-        this.currentProcess = null;
-        this.outputChannel.appendLine(`[TtsPlayer] Process error: ${err.message}`);
+      proc.on("error", (err) => {
+        // Only update state if this is still the active process.
+        // A newer process may have already taken over after stop() was called.
+        if (this.currentProcess === proc) {
+          this.isPlaying = false;
+          this.currentProcess = null;
+        }
+        this.outputChannel.appendLine(
+          `[TtsPlayer] Process error: ${err.message}`,
+        );
         reject(err);
       });
 
-      proc.on('close', (code) => {
-        this.isPlaying = false;
-        this.currentProcess = null;
+      proc.on("close", (code) => {
+        // Only update state if this is still the active process.
+        // When stop() kills a process and a new one starts immediately,
+        // the killed process's close event fires asynchronously and would
+        // otherwise null out the new process reference, causing overlapping audio.
+        if (this.currentProcess === proc) {
+          this.isPlaying = false;
+          this.currentProcess = null;
+        }
 
         if (code === 0 || code === null) {
           this.outputChannel.appendLine(`[TtsPlayer] Playback completed`);
           resolve();
         } else {
-          this.outputChannel.appendLine(`[TtsPlayer] Process exited with code ${code}`);
+          this.outputChannel.appendLine(
+            `[TtsPlayer] Process exited with code ${code}`,
+          );
           reject(new Error(`Audio player exited with code ${code}`));
         }
       });
@@ -389,16 +459,20 @@ export class TtsPlayer {
    */
   private getApiKey(): string | undefined {
     // 1. Check VS Code settings first
-    const config = vscode.workspace.getConfiguration('debrief');
-    const settingsKey = config.get<string>('openaiApiKey');
+    const config = vscode.workspace.getConfiguration("debrief");
+    const settingsKey = config.get<string>("openaiApiKey");
     if (settingsKey) {
-      this.outputChannel.appendLine(`[TtsPlayer] Using API key from VS Code settings`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Using API key from VS Code settings`,
+      );
       return settingsKey;
     }
 
     // 2. Check environment variable
     if (process.env.OPENAI_API_KEY) {
-      this.outputChannel.appendLine(`[TtsPlayer] Using API key from environment variable`);
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Using API key from environment variable`,
+      );
       return process.env.OPENAI_API_KEY;
     }
 
@@ -407,30 +481,45 @@ export class TtsPlayer {
     if (workspaceFolders) {
       for (const folder of workspaceFolders) {
         // Check workspace root .env
-        const rootEnvPath = path.join(folder.uri.fsPath, '.env');
+        const rootEnvPath = path.join(folder.uri.fsPath, ".env");
         if (fs.existsSync(rootEnvPath)) {
-          this.outputChannel.appendLine(`[TtsPlayer] Loading .env from: ${rootEnvPath}`);
+          this.outputChannel.appendLine(
+            `[TtsPlayer] Loading .env from: ${rootEnvPath}`,
+          );
           const result = dotenv.config({ path: rootEnvPath });
           if (result.parsed?.OPENAI_API_KEY) {
-            this.outputChannel.appendLine(`[TtsPlayer] Found API key in ${rootEnvPath}`);
+            this.outputChannel.appendLine(
+              `[TtsPlayer] Found API key in ${rootEnvPath}`,
+            );
             return result.parsed.OPENAI_API_KEY;
           }
         }
 
         // Check extension folder .env
-        const extEnvPath = path.join(folder.uri.fsPath, 'extensions', 'debrief', '.env');
+        const extEnvPath = path.join(
+          folder.uri.fsPath,
+          "extensions",
+          "debrief",
+          ".env",
+        );
         if (fs.existsSync(extEnvPath)) {
-          this.outputChannel.appendLine(`[TtsPlayer] Loading .env from: ${extEnvPath}`);
+          this.outputChannel.appendLine(
+            `[TtsPlayer] Loading .env from: ${extEnvPath}`,
+          );
           const result = dotenv.config({ path: extEnvPath });
           if (result.parsed?.OPENAI_API_KEY) {
-            this.outputChannel.appendLine(`[TtsPlayer] Found API key in ${extEnvPath}`);
+            this.outputChannel.appendLine(
+              `[TtsPlayer] Found API key in ${extEnvPath}`,
+            );
             return result.parsed.OPENAI_API_KEY;
           }
         }
       }
     }
 
-    this.outputChannel.appendLine(`[TtsPlayer] No API key found in settings, environment, or .env files`);
+    this.outputChannel.appendLine(
+      `[TtsPlayer] No API key found in settings, environment, or .env files`,
+    );
     return undefined;
   }
 
@@ -441,7 +530,7 @@ export class TtsPlayer {
     let hash = 0;
     for (let i = 0; i < text.length; i++) {
       const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash;
     }
     return `tts_${Math.abs(hash)}`;

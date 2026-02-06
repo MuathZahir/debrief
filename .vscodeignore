@@ -22,6 +22,9 @@ scripts/**
 # Test/dev trace files
 .debrief/**
 
+# Remotion demo video project
+video/**
+
 # Skill file (distributed separately via MuathZahir/debrief repo)
 SKILL.md
 

@@ -117,6 +117,119 @@ body {
   margin-top: 16px !important;
 }
 
+/* ── Trace notification card ─────────────────────────────────────────── */
+
+.trace-notification {
+  display: none;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.trace-notification.visible {
+  display: block;
+  animation: notificationSlideIn 0.3s ease-out;
+}
+
+@keyframes notificationSlideIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.trace-notification-card {
+  background: linear-gradient(135deg,
+    rgba(56, 139, 253, 0.12) 0%,
+    rgba(163, 113, 247, 0.10) 100%);
+  border: 1px solid var(--vscode-focusBorder, #388bfd);
+  border-radius: 8px;
+  padding: 20px 16px;
+  text-align: center;
+}
+
+.trace-notification-icon {
+  font-size: 2em;
+  margin-bottom: 8px;
+}
+
+.trace-notification-title {
+  font-weight: 700;
+  font-size: 1.1em;
+  color: var(--vscode-foreground);
+  margin-bottom: 4px;
+}
+
+.trace-notification-detail {
+  font-size: 0.88em;
+  color: var(--vscode-descriptionForeground, rgba(255,255,255,0.6));
+  margin-bottom: 4px;
+}
+
+.trace-notification-filename {
+  font-size: 0.82em;
+  color: var(--vscode-descriptionForeground, rgba(255,255,255,0.4));
+  font-family: var(--vscode-editor-font-family, monospace);
+  margin-bottom: 16px;
+}
+
+.trace-notification-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-notification-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 16px;
+  font-size: 0.95em;
+  font-weight: 600;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.1s;
+}
+
+.trace-notification-btn:hover {
+  transform: translateY(-1px);
+}
+
+.trace-notification-btn:active {
+  transform: translateY(0);
+}
+
+.trace-notification-btn-primary {
+  background: var(--vscode-button-background, #388bfd);
+  color: var(--vscode-button-foreground, #fff);
+}
+
+.trace-notification-btn-primary:hover {
+  background: var(--vscode-button-hoverBackground, #2a7ae6);
+}
+
+.trace-notification-btn-secondary {
+  background: var(--vscode-button-secondaryBackground, rgba(255,255,255,0.1));
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+}
+
+.trace-notification-btn-secondary:hover {
+  background: var(--vscode-button-secondaryHoverBackground, rgba(255,255,255,0.15));
+}
+
+.trace-notification-dismiss {
+  margin-top: 4px;
+  font-size: 0.8em;
+  color: var(--vscode-descriptionForeground, rgba(255,255,255,0.4));
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px;
+}
+
+.trace-notification-dismiss:hover {
+  color: var(--vscode-foreground);
+}
+
 .load-replay-btn {
   display: inline-flex;
   align-items: center;

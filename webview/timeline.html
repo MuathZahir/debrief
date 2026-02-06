@@ -32,6 +32,25 @@
       <div class="pregen-text" id="pregenText">Preparing audio...</div>
     </div>
 
+    <!-- Trace notification card (shown when new trace detected) -->
+    <div class="trace-notification" id="traceNotification">
+      <div class="trace-notification-card">
+        <div class="trace-notification-icon">&#x1F3AC;</div>
+        <div class="trace-notification-title">New walkthrough ready</div>
+        <div class="trace-notification-detail" id="traceNotificationDetail"></div>
+        <div class="trace-notification-filename" id="traceNotificationFilename"></div>
+        <div class="trace-notification-actions">
+          <button class="trace-notification-btn trace-notification-btn-primary" id="btnWalkthrough">
+            &#x25B6; Walk Me Through It
+          </button>
+          <button class="trace-notification-btn trace-notification-btn-secondary" id="btnViewSummary">
+            &#x1F4CB; View Summary
+          </button>
+          <button class="trace-notification-dismiss" id="btnDismissNotification">Dismiss</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Step list -->
     <div class="step-list" id="stepList">
       <div class="empty-state" id="emptyState">
