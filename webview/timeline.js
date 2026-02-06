@@ -25,6 +25,7 @@
   const transitionBanner = document.getElementById('transitionBanner');
   const transitionText = document.getElementById('transitionText');
   const btnLoadReplay = document.getElementById('btnLoadReplay');
+  const btnPickTrace = document.getElementById('btnPickTrace');
   const traceNotification = document.getElementById('traceNotification');
   const traceNotificationDetail = document.getElementById('traceNotificationDetail');
   const traceNotificationFilename = document.getElementById('traceNotificationFilename');
@@ -397,6 +398,10 @@
   });
 
   btnLoadReplay.addEventListener('click', function () {
+    vscode.postMessage({ command: 'loadReplay' });
+  });
+
+  btnPickTrace.addEventListener('click', function () {
     vscode.postMessage({ command: 'loadReplay' });
   });
 

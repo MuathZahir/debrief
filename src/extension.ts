@@ -156,6 +156,12 @@ export function activate(context: vscode.ExtensionContext) {
   traceWatcher.onTraceDetected(async ({ traceUri }) => {
     outputChannel.appendLine(`Trace detected: ${traceUri.fsPath}`);
 
+    // Skip notification if this is the currently loaded trace (e.g. comment save)
+    if (loadedTracePath && path.normalize(traceUri.fsPath) === path.normalize(loadedTracePath)) {
+      outputChannel.appendLine('Skipping notification — trace is already loaded');
+      return;
+    }
+
     const { session, warnings } = await parseTraceFile(traceUri.fsPath);
     for (const warning of warnings) {
       outputChannel.appendLine(`[warn] ${warning}`);
@@ -343,20 +349,55 @@ export function activate(context: vscode.ExtensionContext) {
         });
       }
 
-      const uris = await vscode.window.showOpenDialog({
-        canSelectMany: false,
-        filters: { 'Trace files': ['jsonl'] },
-        openLabel: 'Load Replay',
-      });
+      // Scan workspace for existing traces and show picker
+      const traces = await scanWorkspaceTraces();
+      let selectedPath: string | undefined;
 
-      if (!uris || uris.length === 0) {
+      if (traces.length > 0) {
+        const items: (vscode.QuickPickItem & { tracePath?: string })[] =
+          traces.map((t) => {
+            const dateStr = t.modifiedDate.toLocaleDateString(undefined, {
+              month: 'short',
+              day: 'numeric',
+              hour: '2-digit',
+              minute: '2-digit',
+            });
+            return {
+              label: t.fileName,
+              description: t.relativePath,
+              detail: `$(list-unordered) ${t.stepCount} steps  $(calendar) ${dateStr}`,
+              tracePath: t.uri.fsPath,
+            };
+          });
+
+        // Add browse option at the bottom
+        items.push({
+          label: '$(folder-opened)  Browse...',
+          description: 'Open file dialog',
+        });
+
+        const picked = await vscode.window.showQuickPick(items, {
+          placeHolder: 'Select a trace to load',
+          matchOnDescription: true,
+          matchOnDetail: true,
+        });
+
+        if (!picked) {
+          return;
+        }
+
+        selectedPath = picked.tracePath ?? (await pickTraceFromDialog());
+      } else {
+        selectedPath = await pickTraceFromDialog();
+      }
+
+      if (!selectedPath) {
         return;
       }
 
-      const filePath = uris[0].fsPath;
-      outputChannel.appendLine(`Loading trace: ${filePath}`);
+      outputChannel.appendLine(`Loading trace: ${selectedPath}`);
 
-      const { session, warnings } = await parseTraceFile(filePath);
+      const { session, warnings } = await parseTraceFile(selectedPath);
 
       for (const warning of warnings) {
         outputChannel.appendLine(`[warn] ${warning}`);
@@ -369,8 +410,8 @@ export function activate(context: vscode.ExtensionContext) {
         return;
       }
 
-      loadedTracePath = filePath;
-      session.tracePath = filePath;
+      loadedTracePath = selectedPath;
+      session.tracePath = selectedPath;
       engine.load(session);
 
       const fileCount = new Set(
@@ -505,6 +546,62 @@ function buildNotificationSummary(session: ReplaySession): string {
   }
 
   return parts.join(' ') + '.';
+}
+
+interface TraceScanResult {
+  uri: vscode.Uri;
+  fileName: string;
+  relativePath: string;
+  stepCount: number;
+  modifiedDate: Date;
+}
+
+async function scanWorkspaceTraces(): Promise<TraceScanResult[]> {
+  const uris = await vscode.workspace.findFiles(
+    '**/.debrief/replay/**/*.jsonl',
+    '**/node_modules/**'
+  );
+
+  const results: TraceScanResult[] = [];
+
+  for (const uri of uris) {
+    try {
+      const stat = await vscode.workspace.fs.stat(uri);
+      const raw = await vscode.workspace.fs.readFile(uri);
+      const content = Buffer.from(raw).toString('utf-8');
+      const stepCount = content
+        .split('\n')
+        .filter((l) => l.trim().length > 0).length;
+
+      const wsFolder = vscode.workspace.getWorkspaceFolder(uri);
+      const relativePath = wsFolder
+        ? path.relative(wsFolder.uri.fsPath, path.dirname(uri.fsPath))
+        : path.dirname(uri.fsPath);
+
+      results.push({
+        uri,
+        fileName: path.basename(uri.fsPath),
+        relativePath,
+        stepCount,
+        modifiedDate: new Date(stat.mtime),
+      });
+    } catch {
+      // Skip files that can't be read
+    }
+  }
+
+  // Sort by modification date, newest first
+  results.sort((a, b) => b.modifiedDate.getTime() - a.modifiedDate.getTime());
+  return results;
+}
+
+async function pickTraceFromDialog(): Promise<string | undefined> {
+  const uris = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    filters: { 'Trace files': ['jsonl'] },
+    openLabel: 'Load Replay',
+  });
+  return uris?.[0]?.fsPath;
 }
 
 function generateSummaryMarkdown(session: ReplaySession): string {
