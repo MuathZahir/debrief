@@ -1,7 +1,7 @@
 {
   "name": "debrief",
   "displayName": "Debrief",
-  "description": "Narrated code walkthroughs with TTS — AI-generated voice explains your code with synchronized line highlights.",
+  "description": "Narrated code walkthroughs — Your AI agent explains what it built, step by step, with voice narration.",
   "version": "0.4.0",
   "publisher": "muath-zaher",
   "license": "MIT",
