@@ -2,6 +2,8 @@
 
 **Narrated code walkthroughs in VS Code** — Your AI agent explains what it built, step by step, with voice narration.
 
+[![Watch the demo](https://img.youtube.com/vi/tpxeZ_UY09A/maxresdefault.jpg)](https://www.youtube.com/watch?v=tpxeZ_UY09A)
+
 ## What It Does
 
 After your AI agent finishes a task, Debrief gives you a guided tour of the changes. It opens each file, highlights the relevant code, and narrates what was done and why — like having the agent sit next to you and walk you through it.
@@ -11,6 +13,10 @@ After your AI agent finishes a task, Debrief gives you a guided tour of the chan
 - **Timeline view** — See all steps at a glance in the sidebar
 - **Step comments** — Leave feedback on any step, saved to the trace file
 - **Keyboard navigation** — `Alt+Left/Right` to move between steps
+
+![Walkthrough notification](https://raw.githubusercontent.com/MuathZahir/debrief/master/media/walkthrough.png)
+
+![Timeline sidebar](https://raw.githubusercontent.com/MuathZahir/debrief/master/media/sidebar.png)
 
 ## Getting Started
 

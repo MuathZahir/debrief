@@ -13,6 +13,7 @@ node_modules/**
 # Documentation (README is included by default)
 CLAUDE.md
 CHANGELOG.md
+DEVELOPMENT.md
 examples/**
 scripts/**
 
