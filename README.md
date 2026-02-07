@@ -29,7 +29,7 @@ Install Debrief from the VS Code Marketplace, then set your OpenAI API key:
 
 ### 2. Give your agent the skill
 
-Debrief works with AI coding agents like Claude Code. Install the trace authoring skill so your agent knows how to create walkthroughs:
+Debrief works with any AI coding assistant — Claude Code, Cursor, Windsurf, Gemini CLI, and more. Install the trace authoring skill so your agent knows how to create walkthroughs:
 
 ```bash
 npx skills add MuathZahir/debrief
@@ -70,4 +70,4 @@ MIT — see [LICENSE](LICENSE) for details.
 
 ---
 
-Built for [Claude Code](https://claude.ai/code) and AI coding assistants.
+Works with any AI coding assistant.
