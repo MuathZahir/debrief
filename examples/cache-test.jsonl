@@ -1,0 +1,3 @@
+{"id":"t1","type":"say","title":"Cache Test Start","narration":"This is a short test trace to verify TTS caching across window reloads."}
+{"id":"t2","type":"highlightRange","title":"TTS Player cache","narration":"Here we have the in-memory audio cache. After our fix, files on disk survive a reload.","filePath":"src/audio/ttsPlayer.ts","range":{"startLine":15,"startCol":0,"endLine":15,"endCol":60}}
+{"id":"t3","type":"highlightRange","title":"Disk fallback","narration":"This is the disk fallback check. If the in-memory cache misses, we look for the file on disk before hitting the API.","filePath":"src/audio/ttsPlayer.ts","range":{"startLine":148,"startCol":0,"endLine":156,"endCol":0}}
