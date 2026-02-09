@@ -146,6 +146,13 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
   }
 
   /**
+   * Public refresh — call when external state changes (e.g. pin to commit).
+   */
+  refresh(): void {
+    this.updateWebview();
+  }
+
+  /**
    * Push the current engine state to the webview.
    */
   private updateWebview(): void {

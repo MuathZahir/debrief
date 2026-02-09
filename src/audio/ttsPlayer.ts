@@ -145,6 +145,16 @@ export class TtsPlayer {
       return audioFilePath;
     }
 
+    // Check disk — file may exist from a previous session
+    const diskPath = path.join(this.tempDir, `${cacheKey}.mp3`);
+    if (fs.existsSync(diskPath)) {
+      this.outputChannel.appendLine(
+        `[TtsPlayer] Recovered cached audio from disk: ${diskPath}`,
+      );
+      this.audioCache.set(cacheKey, diskPath);
+      return diskPath;
+    }
+
     audioFilePath = await this.generateTts(text, cacheKey);
     this.audioCache.set(cacheKey, audioFilePath);
     return audioFilePath;
@@ -204,9 +214,21 @@ export class TtsPlayer {
       return;
     }
 
-    // Check cache first
+    // Check cache first (in-memory, then disk)
     const cacheKey = this.getCacheKey(text);
     let audioFilePath = this.audioCache.get(cacheKey);
+
+    if (!audioFilePath || !fs.existsSync(audioFilePath)) {
+      // Check disk — file may exist from a previous session
+      const diskPath = path.join(this.tempDir, `${cacheKey}.mp3`);
+      if (fs.existsSync(diskPath)) {
+        this.outputChannel.appendLine(
+          `[TtsPlayer] Recovered cached audio from disk: ${diskPath}`,
+        );
+        audioFilePath = diskPath;
+        this.audioCache.set(cacheKey, diskPath);
+      }
+    }
 
     if (!audioFilePath || !fs.existsSync(audioFilePath)) {
       try {
@@ -538,7 +560,10 @@ export class TtsPlayer {
 
   dispose(): void {
     this.stop();
-    this.clearCache();
+    // Don't delete cached audio files — they're in the OS temp dir and
+    // will be cleaned up naturally. Preserving them avoids re-generating
+    // TTS on window reload.
+    this.audioCache.clear();
     this._onPlaybackComplete.dispose();
   }
 }

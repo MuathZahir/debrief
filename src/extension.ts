@@ -635,6 +635,7 @@ export function activate(context: vscode.ExtensionContext) {
         }
         session.metadata.commitSha = commitSha;
         session.metadata.profile = 'documentation';
+        session.metadata.sourceKind = 'git';
 
         // Persist the updated metadata to the trace file
         // Engine.persistTraceFile is private — write metadata.json directly
@@ -646,6 +647,7 @@ export function activate(context: vscode.ExtensionContext) {
             const meta = JSON.parse(existing);
             meta.commitSha = commitSha;
             meta.profile = 'documentation';
+            meta.sourceKind = 'git';
             await fs.promises.writeFile(
               metaPath,
               JSON.stringify(meta, null, 2),
@@ -656,7 +658,7 @@ export function activate(context: vscode.ExtensionContext) {
             await fs.promises.writeFile(
               metaPath,
               JSON.stringify(
-                { commitSha, profile: 'documentation', sourceKind: session.metadata.sourceKind, snapshotsDir: session.metadata.snapshotsDir },
+                { commitSha, profile: 'documentation', sourceKind: 'git', snapshotsDir: session.metadata.snapshotsDir },
                 null,
                 2
               ),
@@ -665,8 +667,9 @@ export function activate(context: vscode.ExtensionContext) {
           }
         }
 
-        // Update status bar
+        // Update UI
         statusBar.showSourceKind({ kind: 'git', commitSha });
+        timelineProvider.refresh();
 
         vscode.window.showInformationMessage(
           `Debrief: Trace pinned to commit ${commitSha.slice(0, 7)}. It is now shareable and reproducible.`
