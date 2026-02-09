@@ -44,6 +44,28 @@ export function activate(context: vscode.ExtensionContext) {
     )
   );
 
+  // ── File decoration for virtual debrief tabs ─────────────────────────
+  context.subscriptions.push(
+    vscode.window.registerFileDecorationProvider({
+      provideFileDecoration(uri) {
+        if (uri.scheme === 'debrief-snapshot') {
+          return {
+            badge: 'D',
+            color: new vscode.ThemeColor('disabledForeground'),
+            tooltip: 'Debrief snapshot — read-only copy from when the trace was created',
+          };
+        }
+        if (uri.scheme === 'debrief-git') {
+          return {
+            badge: 'D',
+            color: new vscode.ThemeColor('disabledForeground'),
+            tooltip: 'Debrief pinned — read-only content from git',
+          };
+        }
+      },
+    })
+  );
+
   // ── Decoration manager ─────────────────────────────────────────────────
   const decorationManager = new DecorationManager();
   context.subscriptions.push({ dispose: () => decorationManager.dispose() });
@@ -80,9 +102,17 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push({ dispose: () => engine.dispose() });
 
   // Wire inline card to engine lifecycle
-  engine.onSessionCleared(() => {
+  engine.onSessionCleared(async () => {
     inlineCard.hide();
     ttsPlayer.stop();
+
+    // Close all debrief virtual document tabs (snapshot + git)
+    for (const tab of vscode.window.tabGroups.all.flatMap(g => g.tabs)) {
+      const uri = (tab.input as { uri?: vscode.Uri })?.uri;
+      if (uri && (uri.scheme === 'debrief-snapshot' || uri.scheme === 'debrief-git')) {
+        await vscode.window.tabGroups.close(tab);
+      }
+    }
   });
 
   // Track the currently loaded trace file path for review export

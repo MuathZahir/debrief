@@ -46,11 +46,18 @@ Press `F5` in VS Code to launch the Extension Development Host for testing.
 - **Highlight Timeline** (`src/util/highlightTimeline.ts`) — Builds timeline from word timings + line references
 - **Highlight Scheduler** (`src/util/highlightScheduler.ts`) — Schedules highlight events during audio playback
 
+### Source Resolution
+
+- **Source Resolver** (`src/replay/sourceResolver.ts`) — Resolves trace file paths to the best available source (git → snapshot → workspace)
+- **Snapshot Capture** (`src/trace/snapshotCapture.ts`) — Copies referenced files to `.assets/snapshots/` alongside the trace on save
+- **Snapshot Content Provider** (`src/ui/snapshotContentProvider.ts`) — Serves snapshot content via `debrief-snapshot://` URIs
+- **Git Content Provider** (`src/ui/gitContentProvider.ts`) — Serves git content via `debrief-git://` URIs, resolves diff refs (`git:`, `snapshot:`, `workspace:`)
+
 ### UI Components
 
-- **Timeline View** (`src/ui/timelineView.ts`) — Sidebar webview showing all steps
+- **Timeline View** (`src/ui/timelineView.ts`) — Sidebar webview showing all steps, source banner with actions
 - **Decorations** (`src/util/decorations.ts`) — Line highlighting with VS Code decoration API
-- **Status Bar** (`src/ui/statusBar.ts`) — Shows current step info
+- **Status Bar** (`src/ui/statusBar.ts`) — Shows current step info and source kind indicator
 - **Inline Card** (`src/ui/inlineCard.ts`) — End-of-line step indicator
 
 ### Agent Integration
@@ -90,6 +97,8 @@ Line 42 highlights when "This function" is spoken and clears after "logic" ends.
 
 ## Key Design Decisions
 
+- **Snapshot-first replay** — Files are frozen on save; replay opens snapshots so highlights are always correct without line remapping
+- **Source resolution priority** — Git pinned → snapshot → workspace fallback, with warnings at each degradation
 - **TTS-first pattern** — Audio starts before file navigation for natural flow
 - **System audio playback** — Uses native players (PowerShell/afplay) instead of webview audio
 - **Word-level sync** — Whisper transcription enables precise highlight timing

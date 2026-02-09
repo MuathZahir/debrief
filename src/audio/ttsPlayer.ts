@@ -99,7 +99,7 @@ export class TtsPlayer {
     // Reject calls from stale handlers that are speaking for the wrong event
     if (this._allowedEventId !== null && eventId !== this._allowedEventId) {
       this.outputChannel.appendLine(
-        `[TtsPlayer] Blocked stale speakAsync for "${eventId}" (current: "${this._allowedEventId}")`
+        `[TtsPlayer] Blocked stale speakAsync for "${eventId}" (current: "${this._allowedEventId}")`,
       );
       return;
     }

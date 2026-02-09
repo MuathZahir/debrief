@@ -329,28 +329,33 @@
     if (sourceInfo.sourceMode === 'workspace') {
       sourceBannerIcon.textContent = '\u26A0'; // warning
       sourceBannerText.textContent = 'Workspace';
-      addBannerAction('Switch to Authored', 'toggleSourceMode');
+      sourceBannerText.title = 'Showing your current files. Highlights may not match if the code changed since the trace was created.';
+      addBannerAction('Switch to Authored', 'toggleSourceMode', 'Show the original files from when the trace was created, so highlights are accurate');
     } else if (sourceInfo.kind === 'git' && sourceInfo.commitSha) {
       var short = sourceInfo.commitSha.slice(0, 7);
       sourceBannerIcon.textContent = '\u{1F4CC}'; // pushpin
       sourceBannerText.textContent = 'Pinned (' + short + ')';
-      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace');
+      sourceBannerText.title = 'This trace is locked to a git commit. Highlights are always accurate and the trace can be shared with others.';
+      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace', 'Compare the original code with your current version side by side');
     } else if (sourceInfo.kind === 'snapshot') {
       sourceBannerIcon.textContent = '\u{1F4E6}'; // package
       sourceBannerText.textContent = 'Snapshot';
-      addBannerAction('Pin to Commit', 'pinTraceToCommit');
-      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace');
+      sourceBannerText.title = 'Showing saved copies of the files from when the trace was created. Highlights are always accurate.';
+      addBannerAction('Pin to Commit', 'pinTraceToCommit', 'Lock this trace to a git commit so it can be shared with others (requires a clean working tree)');
+      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace', 'Compare the original code with your current version side by side');
     } else {
       sourceBannerIcon.textContent = '\u26A0';
       sourceBannerText.textContent = 'Workspace';
-      addBannerAction('Switch to Authored', 'toggleSourceMode');
+      sourceBannerText.title = 'Showing your current files. Highlights may not match if the code changed since the trace was created.';
+      addBannerAction('Switch to Authored', 'toggleSourceMode', 'Show the original files from when the trace was created, so highlights are accurate');
     }
   }
 
-  function addBannerAction(label, command) {
+  function addBannerAction(label, command, tooltip) {
     var btn = document.createElement('button');
     btn.className = 'source-banner-action';
     btn.textContent = label;
+    if (tooltip) btn.title = tooltip;
     btn.addEventListener('click', function () {
       vscode.postMessage({ command: command });
     });

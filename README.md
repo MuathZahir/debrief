@@ -9,9 +9,11 @@
 After your AI agent finishes a task, Debrief gives you a guided tour of the changes. It opens each file, highlights the relevant code, and narrates what was done and why — like having the agent sit next to you and walk you through it.
 
 - **Voice narration** — AI-generated speech explains each change naturally
+- **Accurate highlights** — Files are snapshotted automatically, so highlights stay correct even if you edit the code later
 - **Automatic detection** — Debrief notifies you when a new walkthrough is ready
 - **Timeline view** — See all steps at a glance in the sidebar
 - **Step comments** — Leave feedback on any step, saved to the trace file
+- **Pin to commit** — Lock a trace to a git commit for sharing with your team
 - **Keyboard navigation** — `Alt+Left/Right` to move between steps
 
 ![Walkthrough notification](https://raw.githubusercontent.com/MuathZahir/debrief/master/media/walkthrough.png)

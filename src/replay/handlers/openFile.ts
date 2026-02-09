@@ -75,7 +75,7 @@ export class OpenFileHandler implements EventHandler {
     }
 
     const editor = await vscode.window.showTextDocument(doc, {
-      preview: false,
+      preview: source.kind !== 'workspace',
       preserveFocus: false,
     });
 

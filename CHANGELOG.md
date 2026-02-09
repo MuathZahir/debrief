@@ -5,6 +5,25 @@ All notable changes to Debrief will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-02-09
+
+### Added
+- **Snapshot-based replay** — Files are automatically captured when a trace is saved, so highlights stay accurate even if the code changes later
+- **Source banner** — Sidebar shows current source mode (Snapshot, Pinned, or Workspace) with action buttons and tooltips
+- **Pin to Commit** — Lock a trace to a git commit for sharing (`Debrief: Pin Trace to Commit...`)
+- **Diff authored vs workspace** — Compare the original code with your current version side by side
+- **Source mode setting** — `debrief.replaySourceMode` to switch between authored and workspace views
+- **Source kind status bar** — Shows whether replay uses snapshot, git, or workspace files
+- **Tab badges** — Virtual debrief files show a "D" badge so they're easy to identify
+
+### Changed
+- Snapshot/git files open in preview tabs (reuse a single tab) instead of accumulating
+- Virtual debrief tabs are closed automatically when a new session loads
+- `commitSha` metadata header is now optional — snapshots handle highlight stability by default
+
+### Removed
+- Line remapper (`LineRemapper`) — replaced entirely by snapshot-based source resolution
+
 ## [0.4.0] - 2025-02-03
 
 ### Added
