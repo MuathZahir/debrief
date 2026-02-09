@@ -29,3 +29,6 @@ out/
 
 # Cached TTS audio
 *.mp3
+
+# Trace snapshots (local file copies for replay accuracy)
+.debrief/**/.assets/

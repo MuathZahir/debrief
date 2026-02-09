@@ -6,6 +6,7 @@ import type { FollowModeController } from '../followMode';
 import type { InlineCardController } from '../../ui/inlineCard';
 import type { TtsPlayer } from '../../audio/ttsPlayer';
 import type { ReplayEngine } from '../engine';
+import type { SnapshotContentProvider } from '../../ui/snapshotContentProvider';
 
 // ── Handler context ────────────────────────────────────────────────────────
 
@@ -14,6 +15,7 @@ export interface HandlerContext {
   decorationManager: DecorationManager;
   outputChannel: vscode.OutputChannel;
   gitContentProvider: GitContentProvider;
+  snapshotContentProvider: SnapshotContentProvider;
   followMode: FollowModeController;
   inlineCard: InlineCardController;
   ttsPlayer: TtsPlayer;

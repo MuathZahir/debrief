@@ -29,6 +29,10 @@
   const traceNotification = document.getElementById('traceNotification');
   const traceNotificationDetail = document.getElementById('traceNotificationDetail');
   const traceNotificationFilename = document.getElementById('traceNotificationFilename');
+  const sourceBanner = document.getElementById('sourceBanner');
+  const sourceBannerIcon = document.getElementById('sourceBannerIcon');
+  const sourceBannerText = document.getElementById('sourceBannerText');
+  const sourceBannerActions = document.getElementById('sourceBannerActions');
   const btnWalkthrough = document.getElementById('btnWalkthrough');
   const btnViewSummary = document.getElementById('btnViewSummary');
   const btnDismissNotification = document.getElementById('btnDismissNotification');
@@ -41,6 +45,7 @@
   let collapsedSections = new Set(); // set of sectionStart event IDs
   let pregenProgress = { current: 0, total: 0, status: 'idle' };
   let commentInputEventId = null; // which step's comment input is showing
+  let sourceInfo = null; // { kind, commitSha, sourceMode }
 
   // ── Icons per event type ───────────────────────────────────────────────
   var TYPE_ICONS = {
@@ -310,6 +315,48 @@
     }
   }
 
+  // ── Source banner ──────────────────────────────────────────────────────
+
+  function renderSourceBanner() {
+    if (!sourceInfo || !sourceInfo.kind || events.length === 0) {
+      sourceBanner.style.display = 'none';
+      return;
+    }
+
+    sourceBanner.style.display = 'flex';
+    sourceBannerActions.innerHTML = '';
+
+    if (sourceInfo.sourceMode === 'workspace') {
+      sourceBannerIcon.textContent = '\u26A0'; // warning
+      sourceBannerText.textContent = 'Workspace';
+      addBannerAction('Switch to Authored', 'toggleSourceMode');
+    } else if (sourceInfo.kind === 'git' && sourceInfo.commitSha) {
+      var short = sourceInfo.commitSha.slice(0, 7);
+      sourceBannerIcon.textContent = '\u{1F4CC}'; // pushpin
+      sourceBannerText.textContent = 'Pinned (' + short + ')';
+      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace');
+    } else if (sourceInfo.kind === 'snapshot') {
+      sourceBannerIcon.textContent = '\u{1F4E6}'; // package
+      sourceBannerText.textContent = 'Snapshot';
+      addBannerAction('Pin to Commit', 'pinTraceToCommit');
+      addBannerAction('Diff vs Workspace', 'diffAuthoredVsWorkspace');
+    } else {
+      sourceBannerIcon.textContent = '\u26A0';
+      sourceBannerText.textContent = 'Workspace';
+      addBannerAction('Switch to Authored', 'toggleSourceMode');
+    }
+  }
+
+  function addBannerAction(label, command) {
+    var btn = document.createElement('button');
+    btn.className = 'source-banner-action';
+    btn.textContent = label;
+    btn.addEventListener('click', function () {
+      vscode.postMessage({ command: command });
+    });
+    sourceBannerActions.appendChild(btn);
+  }
+
   // ── Main render ────────────────────────────────────────────────────────
 
   function render() {
@@ -430,12 +477,20 @@
         events = msg.events || [];
         currentIndex = msg.currentIndex;
         playState = msg.playState || 'stopped';
+        if (msg.sourceKind !== undefined) {
+          sourceInfo = {
+            kind: msg.sourceKind || null,
+            commitSha: msg.commitSha || null,
+            sourceMode: msg.sourceMode || 'authored'
+          };
+        }
         if (currentIndex >= 0) {
           visitedSteps.add(currentIndex);
         }
         // Hide notification card when session state arrives
         traceNotification.classList.remove('visible');
         render();
+        renderSourceBanner();
         break;
 
       case 'clearSession':
@@ -446,7 +501,9 @@
         collapsedSections = new Set();
         pregenProgress = { current: 0, total: 0, status: 'idle' };
         commentInputEventId = null;
+        sourceInfo = null;
         render();
+        renderSourceBanner();
         updatePregenProgress();
         break;
 

@@ -9,6 +9,7 @@ import type {
 import { getHandler } from './handlers/index';
 import type { HandlerContext } from './handlers/index';
 import { TtsPreloader, type PregenProgressEvent } from '../audio/ttsPreloader';
+import * as path from 'path';
 
 /**
  * ReplayEngine is a state machine that tracks the current step in a replay
@@ -126,6 +127,20 @@ export class ReplayEngine {
     this.events = session.events;
     this.session = session;
     this._currentIndex = -1;
+
+    // Set snapshot root for this session
+    if (session.tracePath) {
+      const traceDir = path.dirname(session.tracePath);
+      const snapshotsDir = session.metadata?.snapshotsDir ?? '.assets/snapshots';
+      const snapshotRoot = path.join(traceDir, snapshotsDir);
+      this.context.snapshotContentProvider.setSnapshotRoot(snapshotRoot);
+      this.context.outputChannel.appendLine(
+        `[engine] Snapshot root: ${snapshotRoot}`
+      );
+    } else {
+      this.context.snapshotContentProvider.setSnapshotRoot(null);
+    }
+
     this._onSessionLoaded.fire(session);
 
     // Start pre-generating TTS for all events in background
@@ -173,6 +188,7 @@ export class ReplayEngine {
     this.session = null;
     this._currentIndex = -1;
     this.context.decorationManager.clearAll();
+    this.context.snapshotContentProvider.setSnapshotRoot(null);
     this._onSessionCleared.fire();
   }
 
@@ -499,9 +515,27 @@ export class ReplayEngine {
         return;
       }
 
-      // Build JSONL content
-      const lines = this.events.map((e) => JSON.stringify(e)).join('\n') + '\n';
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(lines, 'utf-8'));
+      // Build JSONL content, preserving inline metadata header
+      const lines: string[] = [];
+
+      if (this.session.metadata) {
+        const header: Record<string, unknown> = {};
+        if (this.session.metadata.commitSha) header.commitSha = this.session.metadata.commitSha;
+        if (this.session.metadata.sourceKind) header.sourceKind = this.session.metadata.sourceKind;
+        if (this.session.metadata.snapshotsDir) header.snapshotsDir = this.session.metadata.snapshotsDir;
+        if (Object.keys(header).length > 0) {
+          lines.push(JSON.stringify(header));
+        }
+      }
+
+      for (const event of this.events) {
+        lines.push(JSON.stringify(event));
+      }
+
+      await vscode.workspace.fs.writeFile(
+        uri,
+        Buffer.from(lines.join('\n') + '\n', 'utf-8')
+      );
     } catch (err) {
       vscode.window.showErrorMessage(`Failed to save comment: ${err}`);
     }

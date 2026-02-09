@@ -57,6 +57,7 @@ export class GitContentProvider implements vscode.TextDocumentContentProvider {
  *
  * Supported formats:
  *   "git:HEAD~1:src/auth.ts"  → debrief-git:/HEAD~1/src/auth.ts
+ *   "snapshot:src/auth.ts"    → debrief-snapshot:/src/auth.ts
  *   "workspace:src/auth.ts"   → file:///workspace/root/src/auth.ts
  */
 export function resolveDiffRef(
@@ -73,6 +74,11 @@ export function resolveDiffRef(
     const gitRef = withoutPrefix.slice(0, colonIndex);
     const filePath = withoutPrefix.slice(colonIndex + 1);
     return vscode.Uri.parse(`debrief-git:/${gitRef}/${filePath}`);
+  }
+
+  if (ref.startsWith('snapshot:')) {
+    const filePath = ref.slice('snapshot:'.length);
+    return vscode.Uri.parse(`debrief-snapshot:/${filePath}`);
   }
 
   if (ref.startsWith('workspace:')) {

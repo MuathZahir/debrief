@@ -3,6 +3,7 @@ import * as path from 'path';
 import type { TraceEvent } from '../../trace/types';
 import type { EventHandler, HandlerContext } from './index';
 import { parseLegacyLineReferences } from '../../util/lineRefParser';
+import { openResolvedSource } from '../sourceResolver';
 
 export class HighlightRangeHandler implements EventHandler {
   async execute(event: TraceEvent, context: HandlerContext): Promise<void> {
@@ -40,36 +41,39 @@ export class HighlightRangeHandler implements EventHandler {
       return;
     }
 
-    const fullPath = path.isAbsolute(event.filePath)
-      ? event.filePath
-      : path.join(context.workspaceRoot, event.filePath);
-
     // Check if we're switching to a different file - show transition indicator
     const currentEditor = vscode.window.activeTextEditor;
-    const currentFile = currentEditor?.document.uri.fsPath;
-    const isSwitchingFiles = currentFile && currentFile !== fullPath;
+    const currentUri = currentEditor?.document.uri.toString();
 
-    if (isSwitchingFiles) {
-      // Show transition indicator in timeline panel
-      context.engine.showFileTransition(path.basename(fullPath));
+    // Resolve the file from the best available source (snapshot, git, or workspace)
+    const result = await openResolvedSource(event.filePath, {
+      workspaceRoot: context.workspaceRoot,
+      metadata: context.engine.currentSession?.metadata,
+      snapshotProvider: context.snapshotContentProvider,
+      outputChannel: context.outputChannel,
+    });
 
-      // Wait 400ms before switching (longer to let user see the banner)
-      await new Promise(resolve => setTimeout(resolve, 400));
-
-      context.engine.hideFileTransition();
-    }
-
-    const uri = vscode.Uri.file(fullPath);
-
-    // Ensure the file is open
-    let doc: vscode.TextDocument;
-    try {
-      doc = await vscode.workspace.openTextDocument(uri);
-    } catch (err) {
+    if (!result) {
       context.outputChannel.appendLine(
-        `[highlightRange] Failed to open ${event.filePath}: ${err}`
+        `[highlightRange] Failed to open any source for ${event.filePath}`
       );
       return;
+    }
+
+    const { doc, source } = result;
+
+    if (source.warning) {
+      context.outputChannel.appendLine(
+        `[highlightRange] ${source.warning}`
+      );
+    }
+
+    // Show file transition if switching files
+    const newUri = source.uri.toString();
+    if (currentUri && currentUri !== newUri) {
+      context.engine.showFileTransition(path.basename(event.filePath));
+      await new Promise(resolve => setTimeout(resolve, 400));
+      context.engine.hideFileTransition();
     }
 
     const editor = await vscode.window.showTextDocument(doc, {
@@ -79,10 +83,11 @@ export class HighlightRangeHandler implements EventHandler {
 
     // Debug: log the raw range from event
     context.outputChannel.appendLine(
-      `[highlightRange] Raw range: startLine=${event.range.startLine}, endLine=${event.range.endLine}, startCol=${event.range.startCol}, endCol=${event.range.endCol}`
+      `[highlightRange] Raw range: startLine=${event.range.startLine}, endLine=${event.range.endLine} (source: ${source.kind})`
     );
 
-    // Clamp lines to document bounds (1-indexed in trace, need to stay 1-indexed for decorationManager)
+    // Clamp lines to document bounds (1-indexed in trace, stay 1-indexed for decorationManager)
+    // Line numbers are always correct when using snapshot or git authored source
     const maxLine = doc.lineCount;
     const startLine = Math.max(1, Math.min(event.range.startLine, maxLine));
     const endLine = Math.max(1, Math.min(event.range.endLine, maxLine));
@@ -95,7 +100,6 @@ export class HighlightRangeHandler implements EventHandler {
     await context.decorationManager.applyHighlightWithAnimation(editor, startLine, endLine);
 
     // Apply amber highlights for legacy [line:X] references (immediate, not timed)
-    // Timed refs from <line:X>text</line:X> are handled by the scheduler above
     if (legacyLineRefs.length > 0) {
       context.decorationManager.applyLineReferences(editor, legacyLineRefs);
       context.outputChannel.appendLine(

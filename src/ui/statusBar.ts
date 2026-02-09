@@ -22,9 +22,15 @@ export interface LiveStatusInfo {
  * - Primary (left-aligned): session state — live spinner, replay step count, or idle
  * - Follow mode (right-aligned): follow mode toggle — "Following" / "Free"
  */
+export interface SourceKindInfo {
+  kind: 'snapshot' | 'git' | 'workspace' | null;
+  commitSha?: string;
+}
+
 export class StatusBarController {
   private primaryItem: vscode.StatusBarItem;
   private followItem: vscode.StatusBarItem;
+  private sourceItem: vscode.StatusBarItem;
   private state: StatusBarState = 'idle';
 
   constructor() {
@@ -34,6 +40,12 @@ export class StatusBarController {
     );
     this.primaryItem.command = 'debrief.timeline.focus';
     this.primaryItem.name = 'Debrief Status';
+
+    this.sourceItem = vscode.window.createStatusBarItem(
+      vscode.StatusBarAlignment.Left,
+      49
+    );
+    this.sourceItem.name = 'Debrief Source';
 
     this.followItem = vscode.window.createStatusBarItem(
       vscode.StatusBarAlignment.Right,
@@ -67,10 +79,40 @@ export class StatusBarController {
     this.primaryItem.text = '$(check) Debrief';
     this.primaryItem.tooltip = 'Debrief — no active session';
     this.primaryItem.show();
+    this.sourceItem.hide();
   }
 
   hidePrimary(): void {
     this.primaryItem.hide();
+  }
+
+  // ── Source kind item ──────────────────────────────────────────────────────
+
+  showSourceKind(info: SourceKindInfo): void {
+    if (!info.kind) {
+      this.sourceItem.hide();
+      return;
+    }
+
+    if (info.kind === 'git' && info.commitSha) {
+      const short = info.commitSha.slice(0, 7);
+      this.sourceItem.text = `$(git-commit) Pinned (${short})`;
+      this.sourceItem.tooltip = `Replaying from git commit ${short} (shareable/reproducible).`;
+      this.sourceItem.command = 'debrief.pinTraceToCommit';
+    } else if (info.kind === 'snapshot') {
+      this.sourceItem.text = '$(archive) Snapshot';
+      this.sourceItem.tooltip = 'Replaying a saved copy so highlights never drift.';
+      this.sourceItem.command = 'debrief.pinTraceToCommit';
+    } else {
+      this.sourceItem.text = '$(warning) Workspace';
+      this.sourceItem.tooltip = 'Replaying from workspace files — highlights may not match.';
+    }
+
+    this.sourceItem.show();
+  }
+
+  hideSourceKind(): void {
+    this.sourceItem.hide();
   }
 
   // ── Follow mode item ─────────────────────────────────────────────────────
@@ -97,6 +139,7 @@ export class StatusBarController {
 
   dispose(): void {
     this.primaryItem.dispose();
+    this.sourceItem.dispose();
     this.followItem.dispose();
   }
 }

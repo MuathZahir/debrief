@@ -116,6 +116,21 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
         case 'loadReplay':
           vscode.commands.executeCommand('debrief.loadReplay');
           break;
+        case 'pinTraceToCommit':
+          vscode.commands.executeCommand('debrief.pinTraceToCommit');
+          break;
+        case 'diffAuthoredVsWorkspace':
+          vscode.commands.executeCommand('debrief.diffAuthoredVsWorkspace');
+          break;
+        case 'toggleSourceMode': {
+          const config = vscode.workspace.getConfiguration('debrief');
+          const current = config.get<string>('replaySourceMode', 'authored');
+          const next = current === 'authored' ? 'workspace' : 'authored';
+          config.update('replaySourceMode', next, vscode.ConfigurationTarget.Workspace).then(() => {
+            this.updateWebview();
+          });
+          break;
+        }
         case 'notificationAction':
           if (this._pendingNotificationResolve) {
             this._pendingNotificationResolve(msg.action);
@@ -138,6 +153,23 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
       return;
     }
 
+    const meta = this.engine.currentSession?.metadata;
+    const sourceMode = vscode.workspace
+      .getConfiguration('debrief')
+      .get<string>('replaySourceMode', 'authored');
+
+    // Determine effective source kind
+    let sourceKind: string | null = null;
+    if (sourceMode === 'workspace') {
+      sourceKind = 'workspace';
+    } else if (meta?.commitSha) {
+      sourceKind = 'git';
+    } else if (meta?.sourceKind === 'snapshot' || meta?.snapshotsDir) {
+      sourceKind = 'snapshot';
+    } else {
+      sourceKind = 'workspace';
+    }
+
     this.view.webview.postMessage({
       command: 'updateState',
       events: this.engine.allEvents.map((e) => ({
@@ -151,6 +183,9 @@ export class TimelineViewProvider implements vscode.WebviewViewProvider {
       })),
       currentIndex: this.engine.currentIndex,
       playState: this.engine.playState,
+      sourceKind,
+      commitSha: meta?.commitSha ?? null,
+      sourceMode,
     });
   }
 

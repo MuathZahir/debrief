@@ -22,6 +22,10 @@ In both cases, start working right away. Read the code, plan the walkthrough str
 
 This skill teaches how to create Debrief replay traces with natural, engaging narration. The goal is to sound like a senior engineer explaining code to a colleague, not like documentation or a robot.
 
+## Highlight Stability
+
+The extension automatically snapshots referenced files when a trace is loaded, so highlights stay accurate even if the code changes later. No special action is needed from the agent — just create the trace normally.
+
 ## Key Principles
 
 1. **Atomic steps**: One highlight per step, one focused thought per narration
@@ -392,3 +396,4 @@ Here's a well-structured trace for explaining a caching implementation:
 - [ ] Transitions connect sections naturally
 - [ ] IDs are unique and sequential (e1, e2, e3... or s1, s1-end for sections)
 - [ ] Risk annotations only on genuinely risky steps (security, breaking-change, migration, performance)
+- [ ] No metadata header needed — the extension handles highlight stability via snapshots

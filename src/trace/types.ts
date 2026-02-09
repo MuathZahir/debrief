@@ -81,11 +81,18 @@ export const traceEventSchema = z.object({
 
 // ── Session ────────────────────────────────────────────────────────────────
 
+export type TraceProfile = 'documentation' | 'personal';
+export type TraceSourceKind = 'git' | 'snapshot';
+
 export interface SessionMetadata {
   agent?: string;
   timestamp?: string;
   duration?: number;
   filesChanged?: string[];
+  commitSha?: string;
+  profile?: TraceProfile;
+  sourceKind?: TraceSourceKind;
+  snapshotsDir?: string;
 }
 
 export const sessionMetadataSchema = z.object({
@@ -93,6 +100,10 @@ export const sessionMetadataSchema = z.object({
   timestamp: z.string().optional(),
   duration: z.number().optional(),
   filesChanged: z.array(z.string()).optional(),
+  commitSha: z.string().optional(),
+  profile: z.enum(['documentation', 'personal']).optional(),
+  sourceKind: z.enum(['git', 'snapshot']).optional(),
+  snapshotsDir: z.string().optional(),
 });
 
 export interface ReplaySession {

@@ -1,17 +1,20 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { exec } from 'child_process';
 import { parseTraceFile } from './trace/parser';
 import { ReplayEngine } from './replay/engine';
 import { FollowModeController } from './replay/followMode';
 import { DecorationManager } from './util/decorations';
-import { GitContentProvider } from './ui/gitContentProvider';
+import { GitContentProvider, resolveDiffRef } from './ui/gitContentProvider';
 import { TimelineViewProvider } from './ui/timelineView';
 import { StatusBarController } from './ui/statusBar';
 import { TraceFileWatcher } from './agent/fileWatcher';
 import { AgentHttpServer } from './agent/httpServer';
 import { InlineCardController } from './ui/inlineCard';
+import { SnapshotContentProvider } from './ui/snapshotContentProvider';
 import { TtsPlayer } from './audio/ttsPlayer';
+import { captureSnapshots, hasExistingSnapshots } from './trace/snapshotCapture';
 import type { HandlerContext } from './replay/handlers/index';
 import type { ReplaySession } from './trace/types';
 
@@ -29,6 +32,15 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.workspace.registerTextDocumentContentProvider(
       'debrief-git',
       gitContentProvider
+    )
+  );
+
+  // ── Snapshot content provider (for snapshot-based traces) ─────────────
+  const snapshotContentProvider = new SnapshotContentProvider();
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      'debrief-snapshot',
+      snapshotContentProvider
     )
   );
 
@@ -55,6 +67,7 @@ export function activate(context: vscode.ExtensionContext) {
     decorationManager,
     outputChannel,
     gitContentProvider,
+    snapshotContentProvider,
     followMode,
     inlineCard,
     ttsPlayer,
@@ -102,6 +115,19 @@ export function activate(context: vscode.ExtensionContext) {
     statusBar.updateFollowMode(followMode.isEnabled)
   );
   engine.onSessionCleared(() => statusBar.hideFollowItem());
+
+  // Wire source kind indicator
+  engine.onSessionLoaded((session) => {
+    const meta = session.metadata;
+    if (meta?.commitSha) {
+      statusBar.showSourceKind({ kind: 'git', commitSha: meta.commitSha });
+    } else if (meta?.sourceKind === 'snapshot' || meta?.snapshotsDir) {
+      statusBar.showSourceKind({ kind: 'snapshot' });
+    } else {
+      statusBar.showSourceKind({ kind: 'workspace' });
+    }
+  });
+  engine.onSessionCleared(() => statusBar.hideSourceKind());
 
   // Wire replay state → status bar
   engine.onStepChanged(({ index, total }) =>
@@ -175,6 +201,26 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     const traceDir = path.dirname(traceUri.fsPath);
+
+    // Backfill snapshots if they don't exist yet (e.g., agent-written traces)
+    if (!hasExistingSnapshots(traceDir)) {
+      await captureSnapshots(
+        session.events,
+        workspaceRoot,
+        traceDir,
+        outputChannel
+      );
+    }
+
+    // Ensure metadata reflects snapshot state (whether just captured or pre-existing)
+    if (hasExistingSnapshots(traceDir)) {
+      if (!session.metadata) {
+        session.metadata = {};
+      }
+      session.metadata.sourceKind ??= 'snapshot';
+      session.metadata.snapshotsDir ??= '.assets/snapshots';
+    }
+
     const stepCount = session.events.length;
     const fileCount = new Set(
       session.events.filter((e) => e.filePath).map((e) => e.filePath)
@@ -283,11 +329,21 @@ export function activate(context: vscode.ExtensionContext) {
         'utf-8'
       );
 
-      // Write metadata.json
+      // Capture file snapshots for stable replay
+      await captureSnapshots(
+        session.events,
+        ws.uri.fsPath,
+        dir,
+        outputChannel
+      );
+
+      // Write metadata.json with snapshot info
       const meta = {
         ...session.metadata,
         timestamp:
           session.metadata.timestamp ?? new Date().toISOString(),
+        sourceKind: session.metadata.sourceKind ?? 'snapshot' as const,
+        snapshotsDir: '.assets/snapshots',
       };
       await fs.promises.writeFile(
         path.join(dir, 'metadata.json'),
@@ -412,6 +468,25 @@ export function activate(context: vscode.ExtensionContext) {
 
       loadedTracePath = selectedPath;
       session.tracePath = selectedPath;
+
+      // Ensure snapshots exist and metadata reflects it
+      const traceDir = path.dirname(selectedPath);
+      if (!hasExistingSnapshots(traceDir)) {
+        await captureSnapshots(
+          session.events,
+          workspaceRoot,
+          traceDir,
+          outputChannel
+        );
+      }
+      if (hasExistingSnapshots(traceDir)) {
+        if (!session.metadata) {
+          session.metadata = {};
+        }
+        session.metadata.sourceKind ??= 'snapshot';
+        session.metadata.snapshotsDir ??= '.assets/snapshots';
+      }
+
       engine.load(session);
 
       const fileCount = new Set(
@@ -492,6 +567,162 @@ export function activate(context: vscode.ExtensionContext) {
   context.subscriptions.push(
     vscode.commands.registerCommand('debrief.showNarration', () => {
       inlineCard.showNarrationPanel();
+    })
+  );
+
+  // Pin Trace to Commit
+  context.subscriptions.push(
+    vscode.commands.registerCommand('debrief.pinTraceToCommit', async () => {
+      if (!engine.isLoaded || !engine.currentSession) {
+        vscode.window.showWarningMessage('Debrief: No trace loaded to pin.');
+        return;
+      }
+
+      const session = engine.currentSession;
+      if (session.metadata?.commitSha) {
+        vscode.window.showInformationMessage(
+          `Debrief: Trace is already pinned to commit ${session.metadata.commitSha.slice(0, 7)}.`
+        );
+        return;
+      }
+
+      // Check git availability and working tree cleanliness
+      try {
+        const isClean = await new Promise<boolean>((resolve, reject) => {
+          exec(
+            'git status --porcelain',
+            { cwd: workspaceRoot },
+            (err, stdout) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve(stdout.trim().length === 0);
+            }
+          );
+        });
+
+        if (!isClean) {
+          const action = await vscode.window.showWarningMessage(
+            'Debrief: Working tree has uncommitted changes. Commit your changes first to pin this trace.',
+            'Open Source Control',
+            'Cancel'
+          );
+          if (action === 'Open Source Control') {
+            vscode.commands.executeCommand('workbench.view.scm');
+          }
+          return;
+        }
+
+        // Get HEAD sha
+        const commitSha = await new Promise<string>((resolve, reject) => {
+          exec(
+            'git rev-parse HEAD',
+            { cwd: workspaceRoot },
+            (err, stdout) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              resolve(stdout.trim());
+            }
+          );
+        });
+
+        // Update session metadata
+        if (!session.metadata) {
+          session.metadata = {};
+        }
+        session.metadata.commitSha = commitSha;
+        session.metadata.profile = 'documentation';
+
+        // Persist the updated metadata to the trace file
+        // Engine.persistTraceFile is private — write metadata.json directly
+        if (session.tracePath) {
+          const traceDir = path.dirname(session.tracePath);
+          const metaPath = path.join(traceDir, 'metadata.json');
+          try {
+            const existing = await fs.promises.readFile(metaPath, 'utf-8');
+            const meta = JSON.parse(existing);
+            meta.commitSha = commitSha;
+            meta.profile = 'documentation';
+            await fs.promises.writeFile(
+              metaPath,
+              JSON.stringify(meta, null, 2),
+              'utf-8'
+            );
+          } catch {
+            // No metadata.json — create one
+            await fs.promises.writeFile(
+              metaPath,
+              JSON.stringify(
+                { commitSha, profile: 'documentation', sourceKind: session.metadata.sourceKind, snapshotsDir: session.metadata.snapshotsDir },
+                null,
+                2
+              ),
+              'utf-8'
+            );
+          }
+        }
+
+        // Update status bar
+        statusBar.showSourceKind({ kind: 'git', commitSha });
+
+        vscode.window.showInformationMessage(
+          `Debrief: Trace pinned to commit ${commitSha.slice(0, 7)}. It is now shareable and reproducible.`
+        );
+        outputChannel.appendLine(`[pinToCommit] Pinned to ${commitSha}`);
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Debrief: Failed to pin trace — ${err}`
+        );
+      }
+    })
+  );
+
+  // Diff Authored vs Workspace
+  context.subscriptions.push(
+    vscode.commands.registerCommand('debrief.diffAuthoredVsWorkspace', async () => {
+      if (!engine.isLoaded || !engine.currentSession) {
+        vscode.window.showWarningMessage('Debrief: No trace loaded.');
+        return;
+      }
+
+      const event = engine.currentEvent;
+      if (!event?.filePath) {
+        vscode.window.showWarningMessage(
+          'Debrief: Current step has no file to diff.'
+        );
+        return;
+      }
+
+      const meta = engine.currentSession.metadata;
+      const normalized = event.filePath.replace(/\\/g, '/');
+
+      // Build left URI (authored source)
+      let leftRef: string;
+      if (meta?.commitSha) {
+        leftRef = `git:${meta.commitSha}:${normalized}`;
+      } else {
+        leftRef = `snapshot:${normalized}`;
+      }
+
+      try {
+        const leftUri = resolveDiffRef(leftRef, workspaceRoot);
+        const rightUri = resolveDiffRef(`workspace:${normalized}`, workspaceRoot);
+        const fileName = path.basename(event.filePath);
+
+        await vscode.commands.executeCommand(
+          'vscode.diff',
+          leftUri,
+          rightUri,
+          `Authored \u2194 Workspace: ${fileName}`
+        );
+      } catch (err) {
+        vscode.window.showErrorMessage(
+          `Debrief: Failed to open diff — ${err}`
+        );
+      }
     })
   );
 

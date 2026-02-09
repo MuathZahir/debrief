@@ -20,6 +20,7 @@ export async function parseTraceFile(filePath: string): Promise<ParseResult> {
 
   const events: TraceEvent[] = [];
   const warnings: string[] = [];
+  let inlineMetadata: SessionMetadata | undefined;
 
   for (let i = 0; i < lines.length; i++) {
     const lineNum = i + 1;
@@ -31,6 +32,17 @@ export async function parseTraceFile(filePath: string): Promise<ParseResult> {
       parsed = JSON.parse(line);
     } catch {
       warnings.push(`Line ${lineNum}: invalid JSON — skipped`);
+      continue;
+    }
+
+    // Check for inline metadata header (a line with session metadata but no event type)
+    const metaResult = sessionMetadataSchema.safeParse(parsed);
+    if (
+      metaResult.success &&
+      (metaResult.data.commitSha || metaResult.data.sourceKind || metaResult.data.snapshotsDir) &&
+      !traceEventSchema.safeParse(parsed).success
+    ) {
+      inlineMetadata = metaResult.data;
       continue;
     }
 
@@ -47,9 +59,10 @@ export async function parseTraceFile(filePath: string): Promise<ParseResult> {
     events.push(result.data);
   }
 
-  // Try to load metadata.json alongside the trace
+  // Try to load metadata.json alongside the trace (inline metadata takes priority)
   const dir = path.dirname(filePath);
-  const metadata = await loadMetadata(path.join(dir, 'metadata.json'));
+  const fileMetadata = await loadMetadata(path.join(dir, 'metadata.json'));
+  const metadata = inlineMetadata ?? fileMetadata;
   const summary = await loadSummary(path.join(dir, 'summary.md'));
 
   return {

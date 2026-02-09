@@ -84,6 +84,14 @@
       {
         "command": "debrief.showNarration",
         "title": "Debrief: Show Narration"
+      },
+      {
+        "command": "debrief.pinTraceToCommit",
+        "title": "Debrief: Pin Trace to Commit..."
+      },
+      {
+        "command": "debrief.diffAuthoredVsWorkspace",
+        "title": "Debrief: Diff Authored vs Workspace"
       }
     ],
     "viewsContainers": {
@@ -167,6 +175,16 @@
             "Shimmer - Soft, gentle voice"
           ],
           "description": "Voice for TTS narration"
+        },
+        "debrief.replaySourceMode": {
+          "type": "string",
+          "default": "authored",
+          "enum": ["authored", "workspace"],
+          "enumDescriptions": [
+            "Replay from authored source (snapshot or git) — highlights are always correct",
+            "Replay from workspace files — highlights may drift if files changed"
+          ],
+          "description": "Source mode for trace replay. 'authored' uses snapshots or git for accurate highlights; 'workspace' uses current files."
         },
         "debrief.ttsSpeed": {
           "type": "number",
