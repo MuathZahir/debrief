@@ -24,7 +24,7 @@ After your AI agent finishes a task, Debrief gives you a guided tour of the chan
 
 ### 1. Install and configure
 
-Install Debrief from the VS Code Marketplace, then set your OpenAI API key:
+Install [Debrief from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=muath-zaher.debrief), then set your OpenAI API key:
 
 - **VS Code Settings** → search `debrief.openaiApiKey` → paste your key
 - Or set the `OPENAI_API_KEY` environment variable

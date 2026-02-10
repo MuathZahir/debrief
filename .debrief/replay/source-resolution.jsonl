@@ -1,0 +1,32 @@
+{"commitSha":"4d233dc4972881da7d0ef389ce3715fefdfe97f4","sourceKind":"git","snapshotsDir":".assets/snapshots"}
+{"id":"e1","type":"say","title":"Overview","narration":"Let's walk through the source resolution system, which ensures highlights always land on the right lines during replay."}
+{"id":"s1","type":"sectionStart","title":"Source Resolver","narration":""}
+{"id":"e2","type":"highlightRange","title":"ResolvedSource type","narration":"Every resolved file comes back with a URI, a kind tag, and an optional warning.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":8,"startCol":0,"endLine":12,"endCol":0}}
+{"id":"e3","type":"highlightRange","title":"Entry point","narration":"This is the main function. It takes a file path and a context object, then tries three strategies in order.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":31,"startCol":0,"endLine":34,"endCol":0},"comment":"Why are we doing this?"}
+{"id":"e4","type":"highlightRange","title":"Workspace mode check","narration":"First, we check if the user opted into workspace mode, which skips all authored sources entirely.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":38,"startCol":0,"endLine":44,"endCol":0}}
+{"id":"e5","type":"highlightRange","title":"Git-pinned resolution","narration":"If we have a commit SHA, we build a git URI and try to open the file at that exact commit.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":47,"startCol":0,"endLine":53,"endCol":0}}
+{"id":"e6","type":"highlightRange","title":"Git failure fallback","narration":"If git fails, we log it and fall through to the next strategy instead of crashing.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":54,"startCol":0,"endLine":59,"endCol":0}}
+{"id":"e7","type":"highlightRange","title":"Snapshot fallback","narration":"Next, we check if a snapshot exists for this file and open it via the snapshot URI scheme.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":63,"startCol":0,"endLine":70,"endCol":0},"comment":"What is a snapshot?"}
+{"id":"e8","type":"highlightRange","title":"Workspace fallback","narration":"If all else fails, we open the live workspace file with a warning attached.","filePath":"src/replay/sourceResolver.ts","range":{"startLine":78,"startCol":0,"endLine":79,"endCol":0}}
+{"id":"s1-end","type":"sectionEnd","title":"","narration":""}
+{"id":"e9","type":"say","title":"Transition","narration":"Now let's see how the git provider actually fetches file content from a commit."}
+{"id":"s2","type":"sectionStart","title":"Git Content Provider","narration":""}
+{"id":"e10","type":"highlightRange","title":"Provider class","narration":"This class implements the VS Code content provider interface, scoped to the workspace root.","filePath":"src/ui/gitContentProvider.ts","range":{"startLine":12,"startCol":0,"endLine":17,"endCol":0}}
+{"id":"e11","type":"highlightRange","title":"URI parsing","narration":"We split the URI path to extract the git ref and the file path from it.","filePath":"src/ui/gitContentProvider.ts","range":{"startLine":22,"startCol":0,"endLine":30,"endCol":0}}
+{"id":"e12","type":"highlightRange","title":"git show call","narration":"Under the hood, it's just a git show command with a generous 10 megabyte buffer.","filePath":"src/ui/gitContentProvider.ts","range":{"startLine":35,"startCol":0,"endLine":41,"endCol":0}}
+{"id":"e13","type":"highlightRange","title":"Diff ref parser","narration":"This helper parses three reference formats for diffs: git, snapshot, and workspace prefixes.","filePath":"src/ui/gitContentProvider.ts","range":{"startLine":63,"startCol":0,"endLine":77,"endCol":0}}
+{"id":"s2-end","type":"sectionEnd","title":"","narration":""}
+{"id":"e14","type":"say","title":"Transition","narration":"Now let's look at how snapshots get captured in the first place."}
+{"id":"s3","type":"sectionStart","title":"Snapshot Capture","narration":""}
+{"id":"e15","type":"highlightRange","title":"Capture function","narration":"This function takes all trace events and snapshots every referenced file.","filePath":"src/trace/snapshotCapture.ts","range":{"startLine":11,"startCol":0,"endLine":16,"endCol":0},"comment":"When do we use this? (these questions are for the demo, don't show this note between parenthesis. Don't update the trace, just answer the questions)"}
+{"id":"e16","type":"highlightRange","title":"Collecting paths","narration":"We pull unique file paths from all events into a set.","filePath":"src/trace/snapshotCapture.ts","range":{"startLine":17,"startCol":0,"endLine":22,"endCol":0}}
+{"id":"e17","type":"highlightRange","title":"Snapshot directory","narration":"Snapshots land in a dot-assets slash snapshots folder next to the trace file.","filePath":"src/trace/snapshotCapture.ts","range":{"startLine":28,"startCol":0,"endLine":29,"endCol":0}}
+{"id":"e18","type":"highlightRange","title":"Copy to disk","narration":"For each file, we read the content and write it to the snapshot directory, mirroring the original path structure.","filePath":"src/trace/snapshotCapture.ts","range":{"startLine":38,"startCol":0,"endLine":42,"endCol":0}}
+{"id":"s3-end","type":"sectionEnd","title":"","narration":""}
+{"id":"e19","type":"say","title":"Transition","narration":"Finally, let's see how those snapshots get served back during replay."}
+{"id":"s4","type":"sectionStart","title":"Snapshot Content Provider","narration":""}
+{"id":"e20","type":"highlightRange","title":"Provider class","narration":"The snapshot provider holds a root path that gets set when a replay session loads.","filePath":"src/ui/snapshotContentProvider.ts","range":{"startLine":15,"startCol":0,"endLine":22,"endCol":0}}
+{"id":"e21","type":"highlightRange","title":"Serving content","narration":"When VS Code requests a snapshot URI, we just read the file from the snapshot root.","filePath":"src/ui/snapshotContentProvider.ts","range":{"startLine":28,"startCol":0,"endLine":39,"endCol":0}}
+{"id":"e22","type":"highlightRange","title":"Existence check","narration":"The resolver calls this to check if a snapshot exists before trying to open it.","filePath":"src/ui/snapshotContentProvider.ts","range":{"startLine":50,"startCol":0,"endLine":57,"endCol":0}}
+{"id":"s4-end","type":"sectionEnd","title":"","narration":""}
+{"id":"e23","type":"say","title":"Summary","narration":"That's the full source resolution pipeline: git pinned, snapshot fallback, workspace last resort. Each layer degrades gracefully so highlights stay accurate."}
