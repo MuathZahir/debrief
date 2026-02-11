@@ -23,6 +23,9 @@ scripts/**
 # Test/dev trace files
 .debrief/**
 
+# Media (referenced via GitHub URLs in README, not needed in VSIX)
+media/**
+
 # Remotion demo video project
 video/**
 
