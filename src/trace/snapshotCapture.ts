@@ -4,7 +4,7 @@ import type { TraceEvent } from './types';
 
 /**
  * Capture workspace file snapshots for all files referenced in trace events.
- * Snapshots are written to `<traceDir>/.assets/snapshots/<filePath>`.
+ * Snapshots are written to `<traceDir>/snapshots/<filePath>`.
  *
  * @returns List of file paths that were successfully snapshotted
  */
@@ -25,7 +25,7 @@ export async function captureSnapshots(
     return [];
   }
 
-  const snapshotsDir = path.join(traceDir, '.assets', 'snapshots');
+  const snapshotsDir = path.join(traceDir, 'snapshots');
   const captured: string[] = [];
 
   for (const filePath of filePaths) {
@@ -58,6 +58,19 @@ export async function captureSnapshots(
  * Check if snapshots already exist for a trace directory.
  */
 export function hasExistingSnapshots(traceDir: string): boolean {
-  const snapshotsDir = path.join(traceDir, '.assets', 'snapshots');
-  return fs.existsSync(snapshotsDir);
+  return getExistingSnapshotsDir(traceDir) !== undefined;
+}
+
+/**
+ * Return the relative snapshots directory if one exists.
+ * Checks `snapshots/` first, then legacy `.assets/snapshots/`.
+ */
+export function getExistingSnapshotsDir(traceDir: string): string | undefined {
+  if (fs.existsSync(path.join(traceDir, 'snapshots'))) {
+    return 'snapshots';
+  }
+  if (fs.existsSync(path.join(traceDir, '.assets', 'snapshots'))) {
+    return '.assets/snapshots';
+  }
+  return undefined;
 }

@@ -5,6 +5,17 @@ All notable changes to Debrief will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-02-11
+
+### Changed
+- **Per-trace snapshots** — Each trace now lives in its own subfolder (e.g., `.debrief/replay/auth-refactor/auth-refactor.jsonl`) with snapshots stored alongside it, so multiple traces no longer overwrite each other's file snapshots
+- Snapshot directory renamed from `.assets/snapshots/` to `snapshots/` for a cleaner layout
+- Agent HTTP save path now creates a unique subfolder per session instead of writing to a shared `trace.jsonl`
+- Skill instructions updated to tell agents to create traces in their own subfolder
+
+### Fixed
+- File snapshots from earlier traces being overwritten when a new trace was created in the same directory
+
 ## [0.5.0] - 2025-02-09
 
 ### Added
@@ -36,7 +47,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Trace Authoring Skill** - Install via `npx skills add MuathZahir/debrief`
 
 ### Changed
-- File watcher detects `.debrief/replay/trace.jsonl` automatically and shows notification
+- File watcher detects `.debrief/replay/**/*.jsonl` automatically and shows notification
 - Clicking "Walk Me Through It" notification now auto-opens sidebar
 - Risk detection is now explicit (agents specify in trace) instead of auto-detected
 

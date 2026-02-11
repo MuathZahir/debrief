@@ -1,7 +1,7 @@
 ---
 name: debrief
 description: This skill should be used when the user asks to "create a Debrief trace", "generate a code walkthrough", "make a narrated code explanation", "create a replay trace", "write trace narration", or mentions Debrief traces, JSONL trace files, or code walkthrough generation. Provides comprehensive guidance for writing natural, engaging narration that sounds like a senior engineer explaining code.
-version: 2.3.0
+version: 2.4.0
 argument-hint: [what to debrief - optional]
 ---
 
@@ -16,7 +16,17 @@ argument-hint: [what to debrief - optional]
 - **If a topic/scope is provided above:** Create a trace for that specific topic. Read the relevant files, understand the code, and generate the trace JSONL file immediately.
 - **If no topic/scope is provided (empty or blank above):** Debrief **everything you have done in this conversation so far.** Look at all files you created, modified, or discussed. Walk through each change, explaining what was done and why. Generate the trace JSONL file immediately.
 
-In both cases, start working right away. Read the code, plan the walkthrough structure, and write the trace file to `.debrief/replay/`. Never ask "what would you like me to debrief?" — the answer is either the argument above or the full conversation history.
+In both cases, start working right away. Read the code, plan the walkthrough structure, and write the trace file. Never ask "what would you like me to debrief?" — the answer is either the argument above or the full conversation history.
+
+**Trace file location:** Each trace goes in its own subfolder under `.debrief/replay/`. The folder and file share the same name:
+
+```
+.debrief/replay/<trace-name>/<trace-name>.jsonl
+```
+
+For example: `.debrief/replay/auth-refactor/auth-refactor.jsonl`
+
+Choose a short, descriptive kebab-case name for the trace (e.g., `auth-refactor`, `add-caching`, `fix-race-condition`).
 
 ---
 

@@ -131,7 +131,7 @@ export class ReplayEngine {
     // Set snapshot root for this session
     if (session.tracePath) {
       const traceDir = path.dirname(session.tracePath);
-      const snapshotsDir = session.metadata?.snapshotsDir ?? '.assets/snapshots';
+      const snapshotsDir = session.metadata?.snapshotsDir ?? 'snapshots';
       const snapshotRoot = path.join(traceDir, snapshotsDir);
       this.context.snapshotContentProvider.setSnapshotRoot(snapshotRoot);
       this.context.outputChannel.appendLine(

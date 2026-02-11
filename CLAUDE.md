@@ -49,7 +49,7 @@ Press `F5` in VS Code to launch the Extension Development Host for testing.
 ### Source Resolution
 
 - **Source Resolver** (`src/replay/sourceResolver.ts`) — Resolves trace file paths to the best available source (git → snapshot → workspace)
-- **Snapshot Capture** (`src/trace/snapshotCapture.ts`) — Copies referenced files to `.assets/snapshots/` alongside the trace on save
+- **Snapshot Capture** (`src/trace/snapshotCapture.ts`) — Copies referenced files to `snapshots/` alongside the trace on save
 - **Snapshot Content Provider** (`src/ui/snapshotContentProvider.ts`) — Serves snapshot content via `debrief-snapshot://` URIs
 - **Git Content Provider** (`src/ui/gitContentProvider.ts`) — Serves git content via `debrief-git://` URIs, resolves diff refs (`git:`, `snapshot:`, `workspace:`)
 

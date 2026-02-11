@@ -14,7 +14,7 @@ import { AgentHttpServer } from './agent/httpServer';
 import { InlineCardController } from './ui/inlineCard';
 import { SnapshotContentProvider } from './ui/snapshotContentProvider';
 import { TtsPlayer } from './audio/ttsPlayer';
-import { captureSnapshots, hasExistingSnapshots } from './trace/snapshotCapture';
+import { captureSnapshots, hasExistingSnapshots, getExistingSnapshotsDir } from './trace/snapshotCapture';
 import type { HandlerContext } from './replay/handlers/index';
 import type { ReplaySession } from './trace/types';
 
@@ -243,12 +243,13 @@ export function activate(context: vscode.ExtensionContext) {
     }
 
     // Ensure metadata reflects snapshot state (whether just captured or pre-existing)
-    if (hasExistingSnapshots(traceDir)) {
+    const detectedSnapshotsDir = getExistingSnapshotsDir(traceDir);
+    if (detectedSnapshotsDir) {
       if (!session.metadata) {
         session.metadata = {};
       }
       session.metadata.sourceKind ??= 'snapshot';
-      session.metadata.snapshotsDir ??= '.assets/snapshots';
+      session.metadata.snapshotsDir ??= detectedSnapshotsDir;
     }
 
     const stepCount = session.events.length;
@@ -341,20 +342,28 @@ export function activate(context: vscode.ExtensionContext) {
   httpServer.onSessionEnded(async (session) => {
     statusBar.showIdle();
 
-    // Save trace files to workspace
+    // Save trace files to workspace (each session gets its own folder)
     const ws = vscode.workspace.workspaceFolders?.[0];
     if (ws && session.events.length > 0) {
-      const dir = path.join(ws.uri.fsPath, '.debrief', 'replay');
+      const timestamp = (session.metadata.timestamp ?? new Date().toISOString())
+        .replace(/[:.]/g, '-')
+        .replace(/T/, '_')
+        .replace(/Z$/, '');
+      const agent = session.metadata.agent
+        ? session.metadata.agent.replace(/[^a-zA-Z0-9_-]/g, '-')
+        : 'trace';
+      const folderName = `${agent}-${timestamp}`;
+      const dir = path.join(ws.uri.fsPath, '.debrief', 'replay', folderName);
       await fs.promises.mkdir(dir, { recursive: true });
 
       // Suppress file watcher to prevent duplicate notification
       traceWatcher.suppressNext = true;
 
-      // Write trace.jsonl
+      // Write <folderName>.jsonl
       const traceContent =
         session.events.map((e) => JSON.stringify(e)).join('\n') + '\n';
       await fs.promises.writeFile(
-        path.join(dir, 'trace.jsonl'),
+        path.join(dir, `${folderName}.jsonl`),
         traceContent,
         'utf-8'
       );
@@ -373,7 +382,7 @@ export function activate(context: vscode.ExtensionContext) {
         timestamp:
           session.metadata.timestamp ?? new Date().toISOString(),
         sourceKind: session.metadata.sourceKind ?? 'snapshot' as const,
-        snapshotsDir: '.assets/snapshots',
+        snapshotsDir: 'snapshots',
       };
       await fs.promises.writeFile(
         path.join(dir, 'metadata.json'),
@@ -509,12 +518,13 @@ export function activate(context: vscode.ExtensionContext) {
           outputChannel
         );
       }
-      if (hasExistingSnapshots(traceDir)) {
+      const detectedSnapshotsDir2 = getExistingSnapshotsDir(traceDir);
+      if (detectedSnapshotsDir2) {
         if (!session.metadata) {
           session.metadata = {};
         }
         session.metadata.sourceKind ??= 'snapshot';
-        session.metadata.snapshotsDir ??= '.assets/snapshots';
+        session.metadata.snapshotsDir ??= detectedSnapshotsDir2;
       }
 
       engine.load(session);
