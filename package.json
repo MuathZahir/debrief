@@ -2,7 +2,7 @@
   "name": "debrief",
   "displayName": "Debrief",
   "description": "Narrated code walkthroughs — Your AI agent explains what it built, step by step, with voice narration.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "muath-zaher",
   "license": "MIT",
   "galleryBanner": {
