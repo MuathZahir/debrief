@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import * as fs from 'fs';
+import * as https from 'https';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { parseTraceFile } from './trace/parser';
@@ -792,6 +793,9 @@ export function activate(context: vscode.ExtensionContext) {
       vscode.window.showInformationMessage('Debrief server stopped');
     })
   );
+
+  // Check for skill updates (non-blocking, once per day)
+  setTimeout(() => checkSkillUpdate(context).catch(() => {}), 10_000);
 }
 
 export function deactivate() {
@@ -903,4 +907,112 @@ function generateSummaryMarkdown(session: ReplaySession): string {
   }
 
   return lines.join('\n');
+}
+
+// ── Skill update checker ───────────────────────────────────────────────────
+
+const SKILL_CHECK_COOLDOWN_MS = 24 * 60 * 60 * 1000; // 1 day
+const SKILL_REMOTE_URL =
+  'https://raw.githubusercontent.com/MuathZahir/debrief/master/SKILL.md';
+
+async function checkSkillUpdate(context: vscode.ExtensionContext): Promise<void> {
+  // Cooldown: only check once per day
+  const lastCheck = context.globalState.get<number>('skillUpdateLastCheck', 0);
+  if (Date.now() - lastCheck < SKILL_CHECK_COOLDOWN_MS) {
+    return;
+  }
+
+  // Find installed skill (check universal location first, then Claude-specific)
+  const homeDir = process.env.HOME || process.env.USERPROFILE;
+  if (!homeDir) {
+    return;
+  }
+  const installedPath =
+    [path.join(homeDir, '.agents', 'skills', 'debrief', 'SKILL.md'),
+     path.join(homeDir, '.claude', 'skills', 'debrief', 'SKILL.md')]
+      .find(p => fs.existsSync(p));
+  if (!installedPath) {
+    return; // Skill not installed via CLI
+  }
+
+  const installedVersion = parseSkillVersion(
+    fs.readFileSync(installedPath, 'utf-8')
+  );
+  if (!installedVersion) {
+    return;
+  }
+
+  // Fetch remote version
+  const remoteContent = await httpsGet(SKILL_REMOTE_URL);
+  const remoteVersion = parseSkillVersion(remoteContent);
+  if (!remoteVersion) {
+    return;
+  }
+
+  // Record check time regardless of result
+  await context.globalState.update('skillUpdateLastCheck', Date.now());
+
+  if (remoteVersion === installedVersion) {
+    return;
+  }
+
+  // Simple semver comparison: split into parts and compare numerically
+  if (!isNewerVersion(remoteVersion, installedVersion)) {
+    return;
+  }
+
+  const action = await vscode.window.showInformationMessage(
+    `Debrief skill update available: ${installedVersion} → ${remoteVersion}`,
+    'Update',
+    'Dismiss'
+  );
+
+  if (action === 'Update') {
+    const terminal = vscode.window.createTerminal('Debrief Skill Update');
+    terminal.sendText('npx skills add MuathZahir/debrief');
+    terminal.show();
+  }
+}
+
+function parseSkillVersion(content: string): string | undefined {
+  return content.match(/^version:\s*(.+)$/m)?.[1]?.trim();
+}
+
+function isNewerVersion(remote: string, installed: string): boolean {
+  const r = remote.split('.').map(Number);
+  const i = installed.split('.').map(Number);
+  for (let idx = 0; idx < Math.max(r.length, i.length); idx++) {
+    const rv = r[idx] ?? 0;
+    const iv = i[idx] ?? 0;
+    if (rv > iv) { return true; }
+    if (rv < iv) { return false; }
+  }
+  return false;
+}
+
+function httpsGet(url: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const req = https.get(url, { timeout: 5000 }, (res) => {
+      // Follow one redirect
+      if (res.statusCode && res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        https.get(res.headers.location, { timeout: 5000 }, (res2) => {
+          let data = '';
+          res2.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+          res2.on('end', () => resolve(data));
+          res2.on('error', reject);
+        }).on('error', reject);
+        return;
+      }
+      if (res.statusCode !== 200) {
+        reject(new Error(`HTTP ${res.statusCode}`));
+        return;
+      }
+      let data = '';
+      res.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+      res.on('end', () => resolve(data));
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')); });
+  });
 }
