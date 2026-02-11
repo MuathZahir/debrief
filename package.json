@@ -82,10 +82,6 @@
         "title": "Debrief: Stop Follow Along Server"
       },
       {
-        "command": "debrief.showNarration",
-        "title": "Debrief: Show Narration"
-      },
-      {
         "command": "debrief.pinTraceToCommit",
         "title": "Debrief: Pin Trace to Commit..."
       },

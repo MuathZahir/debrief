@@ -9,7 +9,6 @@ import { FollowModeController } from './replay/followMode';
 import { DecorationManager } from './util/decorations';
 import { GitContentProvider, resolveDiffRef } from './ui/gitContentProvider';
 import { TimelineViewProvider } from './ui/timelineView';
-import { StatusBarController } from './ui/statusBar';
 import { TraceFileWatcher } from './agent/fileWatcher';
 import { AgentHttpServer } from './agent/httpServer';
 import { InlineCardController } from './ui/inlineCard';
@@ -133,58 +132,6 @@ export function activate(context: vscode.ExtensionContext) {
     setReplayActive(false);
     loadedTracePath = null;
   });
-
-  // ── Status bar controller ───────────────────────────────────────────────
-  const statusBar = new StatusBarController();
-  context.subscriptions.push(statusBar);
-
-  // Wire follow mode → status bar
-  followMode.onFollowModeChanged(({ enabled }) =>
-    statusBar.updateFollowMode(enabled)
-  );
-  engine.onSessionLoaded(() =>
-    statusBar.updateFollowMode(followMode.isEnabled)
-  );
-  engine.onSessionCleared(() => statusBar.hideFollowItem());
-
-  // Wire source kind indicator
-  engine.onSessionLoaded((session) => {
-    const meta = session.metadata;
-    if (meta?.commitSha) {
-      statusBar.showSourceKind({ kind: 'git', commitSha: meta.commitSha });
-    } else if (meta?.sourceKind === 'snapshot' || meta?.snapshotsDir) {
-      statusBar.showSourceKind({ kind: 'snapshot' });
-    } else {
-      statusBar.showSourceKind({ kind: 'workspace' });
-    }
-  });
-  engine.onSessionCleared(() => statusBar.hideSourceKind());
-
-  // Wire replay state → status bar
-  engine.onStepChanged(({ index, total }) =>
-    statusBar.showReplayStatus({
-      step: index + 1,
-      total,
-      speed: engine.speed,
-    })
-  );
-  engine.onPlayStateChanged(({ speed }) => {
-    if (engine.isLoaded) {
-      statusBar.showReplayStatus({
-        step: engine.currentIndex + 1,
-        total: engine.stepCount,
-        speed,
-      });
-    }
-  });
-  engine.onSessionLoaded(() =>
-    statusBar.showReplayStatus({
-      step: 1,
-      total: engine.stepCount,
-      speed: engine.speed,
-    })
-  );
-  engine.onSessionCleared(() => statusBar.showIdle());
 
   // Re-execute current step when follow mode is re-enabled
   followMode.onFollowModeChanged(({ enabled }) => {
@@ -320,9 +267,6 @@ export function activate(context: vscode.ExtensionContext) {
 
   // Wire live session events
   httpServer.onSessionStarted((metadata) => {
-    statusBar.showLiveStatus({
-      title: metadata.agent ?? 'Agent session started',
-    });
     outputChannel.appendLine(
       `[httpServer] Session started: ${metadata.agent ?? 'unknown agent'}`
     );
@@ -330,18 +274,9 @@ export function activate(context: vscode.ExtensionContext) {
 
   httpServer.onEventsReceived((events) => {
     engine.appendEvents(events);
-    // Update status bar with latest event info
-    const lastEvent = events[events.length - 1];
-    if (lastEvent) {
-      statusBar.showLiveStatus({
-        filePath: lastEvent.filePath,
-        title: lastEvent.title,
-      });
-    }
   });
 
   httpServer.onSessionEnded(async (session) => {
-    statusBar.showIdle();
 
     // Save trace files to workspace (each session gets its own folder)
     const ws = vscode.workspace.workspaceFolders?.[0];
@@ -604,13 +539,6 @@ export function activate(context: vscode.ExtensionContext) {
     })
   );
 
-  // Show Narration (when status bar is clicked)
-  context.subscriptions.push(
-    vscode.commands.registerCommand('debrief.showNarration', () => {
-      inlineCard.showNarrationPanel();
-    })
-  );
-
   // Pin Trace to Commit
   context.subscriptions.push(
     vscode.commands.registerCommand('debrief.pinTraceToCommit', async () => {
@@ -709,7 +637,6 @@ export function activate(context: vscode.ExtensionContext) {
         }
 
         // Update UI
-        statusBar.showSourceKind({ kind: 'git', commitSha });
         timelineProvider.refresh();
 
         vscode.window.showInformationMessage(

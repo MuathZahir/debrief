@@ -2,31 +2,15 @@ import * as vscode from 'vscode';
 import type { TraceEvent } from '../trace/types';
 
 /**
- * Manages inline narration display using status bar and subtle line indicators.
- * Shows step info in status bar (clickable) and a small marker on the highlighted line.
+ * Manages inline line marker decorations during replay.
+ * Shows a small marker on the highlighted line (e.g. ` [3]`).
  */
 export class InlineCardController {
   private lineMarker: vscode.TextEditorDecorationType | null = null;
   private activeEditor: vscode.TextEditor | null = null;
-  private statusBarItem: vscode.StatusBarItem;
-  private narrationPanel: vscode.WebviewPanel | null = null;
-
-  constructor() {
-    // Main status bar item for step info
-    this.statusBarItem = vscode.window.createStatusBarItem(
-      vscode.StatusBarAlignment.Left,
-      100
-    );
-    this.statusBarItem.command = 'debrief.showNarration';
-  }
 
   /**
    * Show step info for a highlighted range.
-   * @param event The trace event
-   * @param stepIndex Current step index (0-based)
-   * @param totalSteps Total number of steps
-   * @param editor The active editor
-   * @param line The first line of the highlight (1-indexed)
    */
   async showCard(
     event: TraceEvent,
@@ -36,9 +20,6 @@ export class InlineCardController {
     line: number
   ): Promise<void> {
     this.clearLineMarker();
-
-    const stepLabel = `Step ${stepIndex + 1}/${totalSteps}`;
-    const title = event.title || 'Step';
 
     // Create a small line marker decoration showing step number
     this.lineMarker = vscode.window.createTextEditorDecorationType({
@@ -60,38 +41,6 @@ export class InlineCardController {
 
     editor.setDecorations(this.lineMarker, [{ range }]);
     this.activeEditor = editor;
-
-    // Update status bar with full info
-    this.statusBarItem.text = `$(comment) ${stepLabel}: ${title}`;
-
-    // Show full narration in tooltip (multiline supported)
-    const narration = event.narration || 'No narration';
-    this.statusBarItem.tooltip = new vscode.MarkdownString(
-      `### ${title}\n\n${narration}\n\n---\n*Click to show full narration panel*`
-    );
-    this.statusBarItem.show();
-
-    // Store current narration for the show command
-    this.currentNarration = { title, narration, stepLabel };
-  }
-
-  private currentNarration: { title: string; narration: string; stepLabel: string } | null = null;
-
-  /**
-   * Show the full narration in a panel (called when status bar is clicked).
-   */
-  showNarrationPanel(): void {
-    if (!this.currentNarration) {
-      return;
-    }
-
-    const { title, narration, stepLabel } = this.currentNarration;
-
-    // Use information message for now (simple but effective)
-    vscode.window.showInformationMessage(
-      `${stepLabel}: ${title}\n\n${narration}`,
-      { modal: false }
-    );
   }
 
   /**
@@ -103,7 +52,6 @@ export class InlineCardController {
     totalSteps: number,
     editor: vscode.TextEditor
   ): Promise<void> {
-    // For file-level events, show at line 1
     await this.showCard(event, stepIndex, totalSteps, editor, 1);
   }
 
@@ -116,19 +64,6 @@ export class InlineCardController {
     totalSteps: number
   ): Promise<void> {
     this.clearLineMarker();
-
-    const stepLabel = `Step ${stepIndex + 1}/${totalSteps}`;
-    const title = event.title || 'Narration';
-    const narration = event.narration || '';
-
-    // Update status bar
-    this.statusBarItem.text = `$(megaphone) ${stepLabel}: ${title}`;
-    this.statusBarItem.tooltip = new vscode.MarkdownString(
-      `### ${title}\n\n${narration}`
-    );
-    this.statusBarItem.show();
-
-    this.currentNarration = { title, narration, stepLabel };
   }
 
   /**
@@ -136,16 +71,6 @@ export class InlineCardController {
    */
   async showSectionStart(sectionTitle: string): Promise<void> {
     this.clearLineMarker();
-
-    this.statusBarItem.text = `$(folder-opened) Section: ${sectionTitle}`;
-    this.statusBarItem.tooltip = `Starting section: ${sectionTitle}`;
-    this.statusBarItem.show();
-
-    this.currentNarration = {
-      title: sectionTitle,
-      narration: `Starting section: ${sectionTitle}`,
-      stepLabel: 'Section'
-    };
   }
 
   /**
@@ -165,15 +90,9 @@ export class InlineCardController {
    */
   hide(): void {
     this.clearLineMarker();
-    this.statusBarItem.hide();
-    this.currentNarration = null;
   }
 
   dispose(): void {
     this.clearLineMarker();
-    this.statusBarItem.dispose();
-    if (this.narrationPanel) {
-      this.narrationPanel.dispose();
-    }
   }
 }
